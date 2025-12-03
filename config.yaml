@@ -1,0 +1,49 @@
+# Semantic Search Engine Configuration
+# =====================================
+
+# Model Configuration
+models:
+  embedding:
+    name: "text-embedding-3-large"
+    provider: "openai"
+
+  chat:
+    name: "gpt-4o-mini"
+    provider: "openai"
+    temperature: 0.0
+
+# Document Processing Configuration
+document_processing:
+  chunk_size: 1000
+  chunk_overlap: 200
+  add_start_index: true
+
+# Vector Store Configuration
+vector_store:
+  provider: "chroma"
+  collection_name: "semantic_search_docs"
+  persist_directory: "./chroma/db"
+
+  # Retrieval settings
+  search_type: "similarity"
+  search_k: 3  # Number of chunks to retrieve
+
+# Retry Configuration
+retry:
+  max_attempts: 3
+  min_wait: 2  # seconds
+  max_wait: 10  # seconds
+  multiplier: 1
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "semantic_search.log"
+
+# System Prompts
+prompts:
+  qa_system: |
+    You're a helpful assistant.
+    Please answer the following question {question} only using the following information {document}.
+    If you can't answer the question, just say you can't answer that question.
