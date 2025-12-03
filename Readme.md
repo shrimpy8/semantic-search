@@ -1,6 +1,6 @@
 # 🔍 Semantic Search Engine
 
-A production-ready RAG (Retrieval Augmented Generation) application built with LangChain, ChromaDB, and Streamlit. Upload PDF documents and ask natural language questions to retrieve contextually relevant answers powered by OpenAI.
+A RAG (Retrieval Augmented Generation) application built with LangChain, ChromaDB, and Streamlit. Upload PDF documents and ask natural language questions to retrieve contextually relevant answers powered by OpenAI.
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
