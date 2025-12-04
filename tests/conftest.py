@@ -126,13 +126,82 @@ def mock_chat_openai():
     return mock
 
 
+@pytest.fixture
+def sample_documents_large():
+    """Create a larger set of sample documents for hybrid search testing."""
+    return [
+        Document(
+            page_content="Machine learning is a subset of artificial intelligence that enables systems to learn from data.",
+            metadata={"page": 1, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Deep learning uses neural networks with many layers to model complex patterns in data.",
+            metadata={"page": 1, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Natural language processing allows computers to understand and generate human language.",
+            metadata={"page": 2, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Computer vision enables machines to interpret and make decisions based on visual data.",
+            metadata={"page": 2, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Reinforcement learning trains agents through reward-based feedback mechanisms.",
+            metadata={"page": 3, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Transfer learning allows models to apply knowledge from one task to another.",
+            metadata={"page": 3, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Convolutional neural networks are particularly effective for image classification tasks.",
+            metadata={"page": 4, "source": "test.pdf"}
+        ),
+        Document(
+            page_content="Recurrent neural networks are designed to handle sequential data like text and time series.",
+            metadata={"page": 4, "source": "test.pdf"}
+        )
+    ]
+
+
+@pytest.fixture
+def mock_semantic_retriever(sample_documents):
+    """Create a mock semantic retriever."""
+    mock = MagicMock()
+    mock.invoke.return_value = sample_documents[:3]
+    return mock
+
+
+@pytest.fixture
+def temp_conversation_dir():
+    """Create a temporary directory for conversation storage."""
+    temp_dir = tempfile.mkdtemp(prefix="conversation_test_")
+    yield temp_dir
+    # Cleanup
+    import shutil
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+
+@pytest.fixture
+def temp_ab_testing_dir():
+    """Create a temporary directory for A/B testing storage."""
+    temp_dir = tempfile.mkdtemp(prefix="ab_testing_test_")
+    yield temp_dir
+    # Cleanup
+    import shutil
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_files():
     """Automatically cleanup test files after each test."""
     yield
 
     # Cleanup test directories
-    test_dirs = ["./test_chroma_db", "./chroma_test"]
+    test_dirs = ["./test_chroma_db", "./chroma_test", "./conversation_history", "./ab_testing_results"]
     for dir_path in test_dirs:
         if os.path.exists(dir_path):
             import shutil

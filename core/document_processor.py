@@ -77,7 +77,8 @@ class DocumentProcessor:
         if not uploaded_file.name.lower().endswith('.pdf'):
             raise ValueError("Only PDF files are supported")
 
-        logger.info(f"Processing file: {uploaded_file.name}, size: {uploaded_file.size} bytes")
+        original_filename = uploaded_file.name
+        logger.info(f"Processing file: {original_filename}, size: {uploaded_file.size} bytes")
 
         # Create temporary file
         temp_file_path = self._create_temp_file(uploaded_file)
@@ -90,6 +91,10 @@ class DocumentProcessor:
             # Split into chunks
             chunks = self.text_splitter.split_documents(docs)
             logger.info(f"Document split into {len(chunks)} chunks")
+
+            # Update source metadata to use original filename (not temp path)
+            for chunk in chunks:
+                chunk.metadata["source"] = original_filename
 
             # Log chunk statistics
             self._log_chunk_stats(chunks)

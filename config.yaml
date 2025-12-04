@@ -24,9 +24,116 @@ vector_store:
   collection_name: "semantic_search_docs"
   persist_directory: "./chroma/db"
 
+  # ChromaDB connection mode
+  # Set use_docker: true to connect to ChromaDB Docker container
+  # Run: docker run -d -p 8000:8000 chromadb/chroma
+  use_docker: true
+  chroma_host: "localhost"
+  chroma_port: 8000
+
   # Retrieval settings
   search_type: "similarity"
   search_k: 3  # Number of chunks to retrieve
+
+# Hybrid Retrieval Configuration
+hybrid_retrieval:
+  # Enable hybrid search (BM25 + semantic)
+  enabled: true
+
+  # Retrieval method: "semantic", "bm25", "hybrid"
+  default_method: "hybrid"
+
+  # Weight for semantic search in hybrid mode (0-1)
+  # 0 = BM25 only, 1 = semantic only, 0.5 = equal weight
+  alpha: 0.5
+
+  # RRF constant for rank fusion (typically 60)
+  rrf_k: 60
+
+  # BM25 parameters
+  bm25:
+    k1: 1.5  # Term frequency saturation
+    b: 0.75  # Length normalization
+
+  # Re-ranking configuration
+  reranking:
+    enabled: true
+    # Provider: "cohere", "jina", or "auto" (tries cohere first, then jina)
+    provider: "auto"
+
+    # Cohere model (if using cohere)
+    cohere_model: "rerank-english-v3.0"
+
+    # Jina model (if using jina)
+    jina_model: "jinaai/jina-reranker-v1-tiny-en"
+
+    # Number of candidates to fetch before reranking
+    fetch_k_multiplier: 3
+
+# Retrieval Presets Configuration
+# Pre-configured profiles for different use cases
+retrieval_presets:
+  high_precision:
+    display_name: "High Precision"
+    description: "Fewer results, higher relevance. Best for specific questions."
+    icon: "🎯"
+    k: 3
+    alpha: 0.7
+    rerank: true
+    method: "hybrid"
+
+  balanced:
+    display_name: "Balanced"
+    description: "Good balance of precision and coverage. Recommended default."
+    icon: "⚖️"
+    k: 5
+    alpha: 0.5
+    rerank: true
+    method: "hybrid"
+
+  high_recall:
+    display_name: "High Recall"
+    description: "More results, broader coverage. Best for exploration."
+    icon: "🔍"
+    k: 10
+    alpha: 0.3
+    rerank: false
+    method: "hybrid"
+
+  # Default preset to use
+  default_preset: "balanced"
+
+# Conversation History Configuration
+conversation:
+  # Enable conversation history
+  enabled: true
+
+  # Storage directory for conversation JSON files
+  storage_dir: "./conversation_history"
+
+  # Maximum queries to retain per session
+  max_history: 50
+
+  # Enable follow-up question optimization
+  follow_up_optimization: true
+
+  # Number of recent Q&A pairs to use for follow-up context
+  context_window: 3
+
+# A/B Testing Configuration
+ab_testing:
+  # Enable A/B testing
+  enabled: true
+
+  # Storage directory for experiment results
+  storage_dir: "./ab_testing_results"
+
+  # Default variants to compare
+  default_variants:
+    - "semantic"
+    - "bm25"
+    - "hybrid"
+    - "hybrid_rerank"
 
 # Retry Configuration
 retry:
@@ -46,4 +153,18 @@ prompts:
   qa_system: |
     You're a helpful assistant.
     Please answer the following question {question} only using the following information {document}.
+    If you can't answer the question, just say you can't answer that question.
+
+  # Follow-up question prompt template
+  follow_up_system: |
+    You're a helpful assistant engaged in a conversation about a document.
+    Use the previous conversation context to understand references and maintain continuity.
+
+    Previous conversation:
+    {conversation_context}
+
+    Document context:
+    {document}
+
+    Please answer the following question: {question}
     If you can't answer the question, just say you can't answer that question.

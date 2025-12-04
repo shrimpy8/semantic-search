@@ -7,6 +7,7 @@ A production-ready RAG (Retrieval Augmented Generation) application built with L
 
 ## ✨ Features
 
+### Core Features
 - **📄 PDF Document Processing**: Upload and parse PDF files with automatic text extraction
 - **🔗 Semantic Chunking**: Intelligent text splitting with configurable chunk sizes and overlap
 - **🎯 Vector Embeddings**: High-quality embeddings using OpenAI text-embedding-3-large
@@ -14,11 +15,55 @@ A production-ready RAG (Retrieval Augmented Generation) application built with L
 - **💬 Natural Language Queries**: Ask questions in plain language about your documents
 - **✨ Contextual Answers**: GPT-4o-mini generates answers based solely on document content
 - **🔄 Real-time Streaming**: Token-by-token answer generation for responsive UX
+
+### Advanced Retrieval
+- **🔀 Hybrid Search**: Combine semantic (vector) and BM25 (keyword) search with RRF fusion
+- **🎛️ Retrieval Presets**: Pre-configured profiles for different use cases:
+  - 🎯 **High Precision**: Fewer results, higher relevance (k=3, alpha=0.7, reranking on)
+  - ⚖️ **Balanced**: Good mix of precision and recall (k=5, alpha=0.5, reranking on)
+  - 🔍 **High Recall**: More results, broader coverage (k=10, alpha=0.3, reranking off)
+- **🏆 Re-ranking**: Optional Cohere/Jina cross-encoder re-ranking for improved result quality
+- **📊 Score Visibility**: View semantic, BM25, and rerank scores for each result
+
+### User Experience
+- **💬 Conversation History**: Context-aware follow-up questions within sessions
+- **🧪 A/B Testing Framework**: Empirically compare retrieval methods on your documents
+- **📋 Duplicate Detection**: Automatic check before uploading already-indexed PDFs
 - **📊 Context Transparency**: View exactly which document chunks were used for answers
+
+### Developer Experience
 - **🛡️ Robust Error Handling**: Automatic retry logic with exponential backoff for API resilience
 - **📝 Structured Logging**: Comprehensive logging for debugging and monitoring
 - **⚙️ YAML Configuration**: Easily customizable settings without code changes
 - **🎨 Modular Architecture**: Clean separation of concerns for maintainability
+
+## 📸 Screenshots
+
+### Semantic Search in Action
+
+Upload a PDF and ask questions - the app retrieves relevant context and generates accurate answers:
+
+![Semantic Search in Action](screenshots/Semantic_Search_In_Action.png)
+
+### Retrieval Profile Presets
+
+Choose from pre-configured retrieval profiles optimized for different use cases:
+
+![Retrieval Profile Settings](screenshots/Retrieval_Profile_Settings.png)
+
+### Sidebar Controls
+
+Full control over retrieval settings, conversation history, and database management:
+
+![Sidebar Controls](screenshots/Semantic_Search_In_Action_Controls.png)
+
+### Custom Retrieval Settings
+
+Fine-tune retrieval parameters when using custom mode:
+
+![Custom Retrieval Settings](screenshots/Custom_Retrieval_Settings.png)
+
+> 📚 **Want to learn more?** See the [Interactive Documentation Screenshots](docs/SCREENSHOTS.md) for detailed views of the "How It Works" page.
 
 ## 🏗️ Architecture
 
@@ -31,25 +76,31 @@ semantic-search/
 ├── config_loader.py            # Configuration management
 ├── core/                       # Core business logic
 │   ├── __init__.py
-│   ├── document_processor.py  # PDF loading and chunking
-│   ├── vector_store.py        # ChromaDB management
-│   └── qa_chain.py            # Question answering pipeline
+│   ├── document_processor.py   # PDF loading and chunking
+│   ├── vector_store.py         # ChromaDB management
+│   ├── qa_chain.py             # Question answering pipeline
+│   ├── hybrid_retriever.py     # Hybrid search (BM25 + Semantic)
+│   ├── bm25_retriever.py       # BM25 keyword search
+│   ├── reranker.py             # Cohere/Jina re-ranking
+│   ├── conversation.py         # Conversation history management
+│   └── ab_testing.py           # A/B testing framework
+├── pages/                      # Streamlit multi-page app
+│   └── 1_How_It_Works.py       # Interactive documentation
 ├── utils/                      # Utility functions
 │   ├── __init__.py
-│   └── retry_utils.py         # API retry decorators
-├── tests/                      # Test suite (41 passing tests)
-│   ├── __init__.py
-│   ├── conftest.py            # pytest fixtures
-│   ├── test_config_loader.py  # Configuration tests
-│   ├── test_document_processor.py  # Document processing tests
-│   ├── test_vector_store.py   # Vector store tests
-│   ├── test_qa_chain.py       # QA chain tests
-│   └── test_retry_utils.py    # Retry logic tests
+│   └── retry_utils.py          # API retry decorators
+├── tests/                      # Test suite
+│   ├── conftest.py             # pytest fixtures
+│   └── test_*.py               # Unit and integration tests
+├── docs/                       # Documentation
+│   └── SCREENSHOTS.md          # How It Works screenshots
+├── screenshots/                # Application screenshots
 ├── pytest.ini                  # pytest configuration
 ├── requirements.txt            # Python dependencies
-├── .env.example               # Environment variables template
-├── .gitignore                 # Git ignore rules
-└── README.md                  # This file
+├── HOW_IT_WORKS.md             # Detailed technical documentation
+├── .env.example                # Environment variables template
+├── .gitignore                  # Git ignore rules
+└── README.md                   # This file
 ```
 
 ### RAG Pipeline
@@ -387,21 +438,29 @@ When you ask a question:
 ## 🗺️ Roadmap
 
 **Completed** ✅:
-- [x] Unit and integration tests (pytest) - 41 passing tests
+- [x] Unit and integration tests (pytest)
+- [x] Hybrid search (BM25 + semantic) with RRF fusion
+- [x] Re-ranking support (Cohere cloud + Jina local)
+- [x] Conversation history and follow-up questions
+- [x] A/B testing framework for retrieval methods
+- [x] Retrieval presets (High Precision / Balanced / High Recall)
+- [x] Score visibility for search results
+- [x] Duplicate file detection
+- [x] Interactive "How It Works" documentation page
+- [x] Confirmation dialogs for destructive actions
+- [x] Streamlined sidebar UI with better organization
 
 **Future enhancements planned**:
-- [ ] Support for multiple file formats (DOCX, TXT, HTML, Markdown)
 - [ ] Multi-document collections with isolated searches
-- [ ] Hybrid search (BM25 + semantic) with re-ranking
+- [ ] Support for multiple file formats (DOCX, TXT, HTML, Markdown)
 - [ ] Document similarity and comparison features
 - [ ] Export search results to CSV/JSON
-- [ ] User authentication and multi-user support
-- [ ] Cloud vector store integration (Pinecone, Weaviate)
 - [ ] Advanced chunking strategies (sentence-based, semantic)
 - [ ] Citation tracking (show exact page/paragraph references)
-- [ ] Conversation history and follow-up questions
 - [ ] Docker containerization
-- [ ] API endpoint for programmatic access
+- [ ] Next.js production UI (Stage 2)
+- [ ] FastAPI backend with Supabase (Stage 2)
+- [ ] User authentication and multi-user support
 
 ## 🤝 Contributing
 
