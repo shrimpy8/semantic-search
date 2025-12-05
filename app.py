@@ -48,6 +48,12 @@ from core import (
     TestVariant
 )
 from utils import add_documents_with_retry, stream_llm_with_retry
+from ui import (
+    apply_page_styles,
+    render_sidebar_header,
+    render_retrieval_settings,
+    render_configuration_display,
+)
 
 # Load configuration
 config = load_config()
@@ -67,9 +73,6 @@ logger = logging.getLogger(__name__)
 
 def initialize_session_state():
     """Initialize all session state variables."""
-    if 'processed_file' not in st.session_state:
-        st.session_state.processed_file = False
-
     if 'vector_store_manager' not in st.session_state:
         st.session_state.vector_store_manager = VectorStoreManager(
             embedding_model_name=config.get_embedding_model(),
@@ -98,6 +101,32 @@ def initialize_session_state():
     if 'documents' not in st.session_state:
         st.session_state.documents = []
 
+    # Check for existing documents and restore state on restart
+    if 'processed_file' not in st.session_state:
+        existing_doc_count = st.session_state.vector_store_manager.get_non_collection_count()
+        if existing_doc_count > 0:
+            logger.info(f"Found {existing_doc_count} existing documents in vector store, restoring state")
+            st.session_state.processed_file = True
+            # Initialize hybrid retriever for existing documents
+            if st.session_state.hybrid_retriever is None:
+                semantic_retriever = st.session_state.vector_store_manager.get_retriever(
+                    search_k=config.get_search_k() * config.get_fetch_k_multiplier()
+                )
+                # Get existing documents for BM25
+                existing_docs = st.session_state.vector_store_manager.get_all_documents()
+                st.session_state.hybrid_retriever = create_hybrid_retriever(
+                    semantic_retriever=semantic_retriever,
+                    documents=existing_docs,
+                    enable_reranker=config.is_reranking_enabled(),
+                    reranker_provider=config.get_reranker_provider(),
+                    alpha=config.get_hybrid_alpha(),
+                    rrf_k=config.get_rrf_k(),
+                    bm25_k1=config.get_bm25_k1(),
+                    bm25_b=config.get_bm25_b()
+                )
+        else:
+            st.session_state.processed_file = False
+
     if 'conversation_manager' not in st.session_state:
         st.session_state.conversation_manager = ConversationManager(
             storage_dir=config.get_conversation_storage_dir(),
@@ -115,127 +144,50 @@ def initialize_session_state():
 
 def render_sidebar():
     """Render sidebar with configuration and management options."""
-    st.sidebar.title("Semantic Search Engine")
-
-    # Retrieval Settings Section (moved to top)
-    st.sidebar.markdown("### Retrieval Settings")
-
-    # Retrieval Profile (Presets)
-    presets = config.get_retrieval_presets()
-    preset_names = list(presets.keys()) + ["custom"]
+    # Branding and navigation (shared component)
+    render_sidebar_header()
 
     # Initialize preset in session state
     if 'current_preset' not in st.session_state:
         st.session_state.current_preset = config.get_default_preset()
 
-    # Format function for preset display
-    def format_preset(preset_name: str) -> str:
-        if preset_name == "custom":
-            return "⚙️ Custom"
-        preset = presets.get(preset_name, {})
-        icon = preset.get("icon", "")
-        display = preset.get("display_name", preset_name)
-        return f"{icon} {display}"
+    # Retrieval settings (shared component)
+    render_retrieval_settings(config)
 
-    selected_preset = st.sidebar.selectbox(
-        "Retrieval Profile",
-        options=preset_names,
-        index=preset_names.index(st.session_state.current_preset) if st.session_state.current_preset in preset_names else 0,
-        format_func=format_preset,
-        help="Pre-configured retrieval settings for different use cases"
-    )
-    st.session_state.current_preset = selected_preset
-
-    # Apply preset values or show custom controls
-    if selected_preset != "custom":
-        preset = presets[selected_preset]
-
-        # Show preset description
-        st.sidebar.info(f"{preset.get('icon', '')} {preset.get('description', '')}")
-
-        # Apply preset values to session state
-        st.session_state.search_k = preset.get("k", 5)
-        st.session_state.hybrid_alpha = preset.get("alpha", 0.5)
-        st.session_state.use_reranking = preset.get("rerank", True)
-        st.session_state.current_retrieval_method = preset.get("method", "hybrid")
-
-        # Show current settings (read-only)
-        with st.sidebar.expander("Preset Settings", expanded=False):
-            st.markdown(f"**Results**: {st.session_state.search_k}")
-            st.markdown(f"**Alpha**: {st.session_state.hybrid_alpha}")
-            st.markdown(f"**Re-ranking**: {'On' if st.session_state.use_reranking else 'Off'}")
-            st.markdown(f"**Method**: {st.session_state.current_retrieval_method}")
-
-    else:
-        # Custom mode - show all controls
-        retrieval_methods = {
-            "Semantic Only": "semantic",
-            "BM25 Only": "bm25",
-            "Hybrid (BM25 + Semantic)": "hybrid"
-        }
-
-        selected_method = st.sidebar.selectbox(
-            "Retrieval Method",
-            options=list(retrieval_methods.keys()),
-            index=list(retrieval_methods.values()).index(
-                st.session_state.current_retrieval_method
-            ) if st.session_state.current_retrieval_method in retrieval_methods.values() else 2,
-            help="Choose retrieval strategy"
-        )
-        st.session_state.current_retrieval_method = retrieval_methods[selected_method]
-
-        # Alpha slider for hybrid mode
-        if st.session_state.current_retrieval_method == "hybrid":
-            st.session_state.hybrid_alpha = st.sidebar.slider(
-                "Semantic Weight (alpha)",
-                min_value=0.0,
-                max_value=1.0,
-                value=getattr(st.session_state, 'hybrid_alpha', config.get_hybrid_alpha()),
-                step=0.1,
-                help="0 = BM25 only, 1 = Semantic only"
-            )
-
-        # Re-ranking toggle
-        st.session_state.use_reranking = st.sidebar.checkbox(
-            "Enable Re-ranking",
-            value=getattr(st.session_state, 'use_reranking', config.is_reranking_enabled()),
-            help="Apply cross-encoder re-ranking for better accuracy"
-        )
-
-        # Number of results
-        st.session_state.search_k = st.sidebar.slider(
-            "Results to retrieve",
-            min_value=1,
-            max_value=10,
-            value=getattr(st.session_state, 'search_k', config.get_search_k()),
-            help="Number of document chunks to retrieve"
-        )
-
-    st.sidebar.markdown("---")
-
-    # Configuration Display
-    with st.sidebar.expander("Configuration", expanded=False):
-        st.markdown(f"**Embedding**: {config.get_embedding_model()}")
-        st.markdown(f"**Chat Model**: {config.get_chat_model()}")
-        st.markdown(f"**Chunk Size**: {config.get_chunk_size()}")
-        st.markdown(f"**Re-ranker**: {config.get_reranker_provider()}")
-
+    # Configuration display (shared component)
+    render_configuration_display(config)
 
 @st.dialog("Clear All Documents")
 def confirm_clear_documents():
-    """Confirmation dialog for clearing all documents."""
-    st.warning("⚠️ This will permanently delete all indexed documents from the database.")
+    """Confirmation dialog for clearing non-collection documents.
+
+    This only clears documents uploaded directly to the home page.
+    Collection documents are managed separately on the Collections page.
+    """
+    non_collection_count = st.session_state.vector_store_manager.get_non_collection_count()
+
+    if non_collection_count == 0:
+        st.info("No documents to clear. The database has no non-collection documents.")
+        if st.button("Close", use_container_width=True):
+            st.rerun()
+        return
+
+    st.warning(
+        f"⚠️ This will permanently delete **{non_collection_count}** document chunks "
+        "uploaded directly to this page."
+    )
+    st.caption("Note: Documents in collections are not affected. Manage them on the Collections page.")
     st.markdown("Are you sure you want to continue?")
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Yes, Clear All", type="primary", use_container_width=True):
             try:
-                st.session_state.vector_store_manager.clear_collection()
+                deleted = st.session_state.vector_store_manager.clear_non_collection_documents()
                 st.session_state.processed_file = False
                 st.session_state.documents = []
                 st.session_state.hybrid_retriever = None
-                logger.info("Vector store cleared by user")
+                logger.info(f"Cleared {deleted} non-collection documents by user")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error clearing database: {str(e)}")
@@ -246,16 +198,21 @@ def confirm_clear_documents():
 
 
 def render_database_management():
-    """Render database management section at bottom of sidebar."""
+    """Render database management section at bottom of sidebar.
+
+    Shows count of non-collection documents only. Collection documents
+    are managed separately through the Collections page.
+    """
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Database Management")
 
     try:
-        collection_count = st.session_state.vector_store_manager.get_collection_count()
-        if collection_count > 0:
-            st.sidebar.success(f"**{collection_count}** document chunks indexed")
+        # Show only non-collection document count
+        non_collection_count = st.session_state.vector_store_manager.get_non_collection_count()
+        if non_collection_count > 0:
+            st.sidebar.success(f"**{non_collection_count}** document chunks indexed")
         else:
-            st.sidebar.info("Database is empty. Upload a document to begin.")
+            st.sidebar.info("No documents indexed. Upload a document to begin.")
     except Exception as e:
         st.sidebar.warning(f"Could not check database status: {str(e)}")
         logger.error(f"Error checking database status: {e}")
@@ -310,6 +267,52 @@ def render_conversation_history():
     with col2:
         if st.button("Clear History"):
             confirm_clear_history()
+
+
+def render_documents_panel():
+    """Render documents panel showing stats and document list."""
+    chunk_count = st.session_state.vector_store_manager.get_non_collection_count()
+
+    if chunk_count == 0:
+        return
+
+    with st.expander(f"📄 Documents ({chunk_count} chunks)", expanded=False):
+        # Stats row
+        stat_cols = st.columns(4)
+        with stat_cols[0]:
+            # Count unique documents by source
+            docs = st.session_state.vector_store_manager.get_all_documents()
+            unique_sources = set(doc.metadata.get("source", "Unknown") for doc in docs)
+            st.metric("Documents", len(unique_sources))
+        with stat_cols[1]:
+            st.metric("Chunks", chunk_count)
+        with stat_cols[2]:
+            st.metric("Chunk Size", config.get_chunk_size())
+        with stat_cols[3]:
+            st.metric("Overlap", config.get_chunk_overlap())
+
+        st.divider()
+
+        # Document list
+        if docs:
+            # Group chunks by source document
+            doc_stats = {}
+            for doc in docs:
+                source = doc.metadata.get("source", "Unknown")
+                if source not in doc_stats:
+                    doc_stats[source] = {"chunks": 0, "pages": set()}
+                doc_stats[source]["chunks"] += 1
+                if doc.metadata.get("page"):
+                    doc_stats[source]["pages"].add(doc.metadata.get("page"))
+
+            st.markdown("**Document List:**")
+            for source, stats in doc_stats.items():
+                # Extract just filename from path
+                filename = source.split("/")[-1] if "/" in source else source
+                page_info = f", {len(stats['pages'])} pages" if stats['pages'] else ""
+                st.markdown(f"📄 **{filename}** — {stats['chunks']} chunks{page_info}")
+        else:
+            st.info("No documents uploaded yet.")
 
 
 def render_ab_testing_panel():
@@ -682,86 +685,8 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # Hide the default page navigation in sidebar
-    st.markdown("""
-        <style>
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # Custom CSS for larger font sizes
-    st.markdown("""
-        <style>
-        /* Increase base font size */
-        html, body, [class*="css"] {
-            font-size: 18px;
-        }
-
-        /* Main content text */
-        .stMarkdown, .stText, p, li {
-            font-size: 18px !important;
-        }
-
-        /* Headers */
-        h1 {
-            font-size: 2.5rem !important;
-        }
-        h2 {
-            font-size: 2rem !important;
-        }
-        h3 {
-            font-size: 1.6rem !important;
-        }
-
-        /* Sidebar text */
-        .css-1d391kg, [data-testid="stSidebar"] {
-            font-size: 17px !important;
-        }
-        [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {
-            font-size: 17px !important;
-        }
-
-        /* Input fields and buttons */
-        .stTextInput input, .stTextArea textarea {
-            font-size: 17px !important;
-        }
-        .stButton button {
-            font-size: 17px !important;
-        }
-
-        /* Selectbox and other widgets */
-        .stSelectbox, .stMultiSelect, .stSlider {
-            font-size: 17px !important;
-        }
-
-        /* Expander text */
-        .streamlit-expanderHeader {
-            font-size: 18px !important;
-        }
-
-        /* Code blocks */
-        code, .stCode {
-            font-size: 15px !important;
-        }
-
-        /* Tab labels */
-        .stTabs [data-baseweb="tab"] {
-            font-size: 17px !important;
-        }
-
-        /* Table text */
-        .stDataFrame, .stTable {
-            font-size: 16px !important;
-        }
-
-        /* Info/Warning/Error boxes */
-        .stAlert {
-            font-size: 17px !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # Apply shared page styles (hide nav + base styles)
+    apply_page_styles()
 
     # Render sidebar
     render_sidebar()
@@ -769,7 +694,7 @@ def main():
     render_database_management()
 
     # Main content
-    st.title("Semantic Search Engine")
+    st.title("Search Documents")
     st.markdown("Upload a PDF document and ask questions using hybrid semantic search.")
 
     # Help Section (moved to top for visibility)
@@ -779,6 +704,13 @@ def main():
     st.page_link(
         "pages/1_How_It_Works.py",
         label="📚 Learn more about optimizing your semantic search →",
+        icon=None
+    )
+
+    # Advanced Search - Collections link
+    st.page_link(
+        "pages/2_Collections.py",
+        label="📁 Advanced Search: Organize your documents into searchable collections →",
         icon=None
     )
 
@@ -803,6 +735,9 @@ def main():
                     process_uploaded_file(uploaded_file)
         else:
             process_uploaded_file(uploaded_file)
+
+    # Documents Panel (shows stats and document list)
+    render_documents_panel()
 
     # A/B Testing Panel
     render_ab_testing_panel()

@@ -75,3 +75,7 @@ Thumbs.db
 temp/
 tmp/
 *.tmp
+
+# Claude Code
+# Local development context and learnings (not for version control)
+.claude/

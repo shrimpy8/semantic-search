@@ -4,8 +4,20 @@ Unit tests for VectorStoreManager - ChromaDB vector store operations.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from core.vector_store import VectorStoreManager
-from langchain_core.documents import Document
+
+# Check if langchain_chroma is available
+try:
+    import langchain_chroma
+    HAS_CHROMA = True
+except ImportError:
+    HAS_CHROMA = False
+
+# Skip entire module if langchain_chroma not installed
+pytestmark = pytest.mark.skipif(not HAS_CHROMA, reason="langchain_chroma not installed")
+
+if HAS_CHROMA:
+    from core.vector_store import VectorStoreManager
+    from langchain_core.documents import Document
 
 
 @pytest.mark.unit
@@ -127,3 +139,74 @@ class TestVectorStoreManager:
         assert manager.embedding_model_name == "text-embedding-3-large"
         assert manager.collection_name == "semantic_search_docs"
         assert manager.persist_directory == "./chroma/db"
+
+    @patch('core.vector_store.OpenAIEmbeddings')
+    @patch('core.vector_store.Chroma')
+    def test_get_all_documents(self, mock_chroma, mock_embeddings, mock_env_vars):
+        """Test retrieving all documents from vector store."""
+        mock_vs = MagicMock()
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {
+            "documents": ["content1", "content2", "content3"],
+            "metadatas": [
+                {"source": "doc1.pdf"},  # No collection_id
+                {"source": "doc2.pdf", "collection_id": "col-1"},  # In collection
+                {"source": "doc3.pdf"}  # No collection_id
+            ]
+        }
+        mock_vs._collection = mock_collection
+        mock_chroma.return_value = mock_vs
+
+        manager = VectorStoreManager()
+
+        # Get non-collection documents (default)
+        docs = manager.get_all_documents()
+        assert len(docs) == 2  # Only docs without collection_id
+        assert docs[0].page_content == "content1"
+        assert docs[1].page_content == "content3"
+
+    @patch('core.vector_store.OpenAIEmbeddings')
+    @patch('core.vector_store.Chroma')
+    def test_get_all_documents_by_collection(self, mock_chroma, mock_embeddings, mock_env_vars):
+        """Test retrieving documents filtered by collection_id."""
+        mock_vs = MagicMock()
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {
+            "documents": ["content1", "content2", "content3"],
+            "metadatas": [
+                {"source": "doc1.pdf"},
+                {"source": "doc2.pdf", "collection_id": "col-1"},
+                {"source": "doc3.pdf", "collection_id": "col-1"}
+            ]
+        }
+        mock_vs._collection = mock_collection
+        mock_chroma.return_value = mock_vs
+
+        manager = VectorStoreManager()
+
+        # Get documents by collection
+        docs = manager.get_all_documents(collection_id="col-1")
+        assert len(docs) == 2
+        assert docs[0].metadata.get("collection_id") == "col-1"
+
+    @patch('core.vector_store.OpenAIEmbeddings')
+    @patch('core.vector_store.Chroma')
+    def test_get_non_collection_count(self, mock_chroma, mock_embeddings, mock_env_vars):
+        """Test counting non-collection documents."""
+        mock_vs = MagicMock()
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {
+            "metadatas": [
+                {"source": "doc1.pdf"},
+                {"source": "doc2.pdf", "collection_id": "col-1"},
+                {"source": "doc3.pdf"},
+                None  # Handle None metadata
+            ]
+        }
+        mock_vs._collection = mock_collection
+        mock_chroma.return_value = mock_vs
+
+        manager = VectorStoreManager()
+        count = manager.get_non_collection_count()
+
+        assert count == 3  # 2 without collection_id + 1 None

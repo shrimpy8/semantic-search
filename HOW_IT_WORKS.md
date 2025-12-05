@@ -20,36 +20,36 @@ This document explains the core concepts, configurations, and how different sett
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        User Query                                │
+│                        User Query                               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Query Processing                              │
-│  • Follow-up optimization (if conversation context exists)       │
+│                    Query Processing                             │
+│  • Follow-up optimization (if conversation context exists)      │
 │  • Query expansion for short queries                            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Retrieval Layer                                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │   Semantic   │  │    BM25      │  │       Hybrid         │  │
-│  │   Search     │  │   Search     │  │  (RRF Fusion)        │  │
-│  │  (Vectors)   │  │  (Keywords)  │  │                      │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+│                   Retrieval Layer                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
+│  │   Semantic   │  │    BM25      │  │       Hybrid         │   │
+│  │   Search     │  │   Search     │  │  (RRF Fusion)        │   │
+│  │  (Vectors)   │  │  (Keywords)  │  │                      │   │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Re-ranking Layer (Optional)                    │
-│  • Cohere (Cloud API) or Jina (Local Model)                     │
+│                   Re-ranking Layer (Optional)                   │
+│  • Jina (Local) or Cohere (Cloud) - auto-selects local first   │
 │  • Cross-encoder scoring for better relevance                   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Answer Generation                              │
+│                   Answer Generation                             │
 │  • GPT-4o-mini with retrieved context                           │
 │  • Conversation-aware prompting                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -180,19 +180,27 @@ hybrid_retrieval:
 
 **Providers:**
 
-| Provider | Type | Speed | Quality | Cost |
-|----------|------|-------|---------|------|
-| Cohere | Cloud API | Fast | Excellent | Per-request |
-| Jina | Local Model | Slower | Good | Free |
+| Provider | Type | Speed | Quality | Cost | Priority |
+|----------|------|-------|---------|------|----------|
+| Jina | Local | No network latency | Good | Free | 1st (preferred) |
+| Cohere | Cloud API | Fast | Excellent | Per-request | 2nd (fallback) |
 
 **Configuration:**
 ```yaml
 hybrid_retrieval:
   reranking:
     enabled: true
-    provider: "auto"  # "cohere", "jina", or "auto"
+    # Provider options:
+    #   - "auto": tries jina (local) first, then cohere (cloud)
+    #   - "jina": force local Jina model
+    #   - "cohere": force cloud Cohere API
+    provider: "auto"
     fetch_k_multiplier: 3  # Fetch 3x more candidates for reranking
 ```
+
+💡 **Auto mode** tries Jina (local) first, then falls back to Cohere (cloud) if unavailable.
+
+⚙️ **Override default**: Set `provider: "cohere"` to force Cohere even when Jina is available.
 
 **fetch_k_multiplier Effect:**
 - `fetch_k_multiplier: 1` → No extra candidates (defeats purpose)
@@ -387,26 +395,26 @@ ab_testing:
 
 ### How to Use A/B Testing
 
-1. **Create an Experiment**
-   - Give it a descriptive name ("Product Docs - Technical Queries")
-   - Select which variants to compare
+1. **Upload a Document**
+   - A/B testing is enabled after uploading a document
+   - Expand the "A/B Testing" panel on the main page
 
-2. **Run Comparisons**
-   - Enter test queries representative of real usage
-   - Click "Run A/B Test" to compare all variants
-   - Each query generates results from all selected methods
+2. **Run Comparison**
+   - Enter a test query representative of real usage
+   - Click "Run Comparison" to automatically test all 4 retrieval methods:
+     - Semantic (pure vector search)
+     - BM25 (pure keyword search)
+     - Hybrid (combined, no reranking)
+     - Hybrid + Rerank (combined with reranking)
 
-3. **Analyze Results**
-   - View per-query comparison in the results panel
-   - Check aggregate statistics per variant
-   - Look for patterns:
-     - Which method has lowest latency?
-     - Which has highest average scores?
-     - Is there a consistent winner?
+3. **View Results**
+   - Results show average score and latency for each method
+   - System recommends the best performing variant
+   - Run multiple queries to get aggregate statistics
 
-4. **Export & Decide**
-   - Export results as JSON/CSV for deeper analysis
-   - Choose the method that best fits your use case
+4. **Export Results**
+   - Click "Export Results (CSV)" to download comparison data
+   - Analyze offline to make informed decisions
 
 ### Interpreting A/B Results
 

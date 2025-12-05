@@ -13,84 +13,21 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for larger font sizes (consistent with main app)
-st.markdown("""
-    <style>
-    /* Increase base font size */
-    html, body, [class*="css"] {
-        font-size: 18px;
-    }
+from ui import apply_page_styles, render_sidebar_header
 
-    /* Main content text */
-    .stMarkdown, .stText, p, li {
-        font-size: 18px !important;
-    }
+# Apply shared page styles (hide nav + base styles)
+apply_page_styles()
 
-    /* Headers */
-    h1 {
-        font-size: 2.5rem !important;
-    }
-    h2 {
-        font-size: 2rem !important;
-    }
-    h3 {
-        font-size: 1.6rem !important;
-    }
-
-    /* Sidebar text */
-    .css-1d391kg, [data-testid="stSidebar"] {
-        font-size: 17px !important;
-    }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {
-        font-size: 17px !important;
-    }
-
-    /* Input fields and buttons */
-    .stTextInput input, .stTextArea textarea {
-        font-size: 17px !important;
-    }
-    .stButton button {
-        font-size: 17px !important;
-    }
-
-    /* Selectbox and other widgets */
-    .stSelectbox, .stMultiSelect, .stSlider {
-        font-size: 17px !important;
-    }
-
-    /* Expander text */
-    .streamlit-expanderHeader {
-        font-size: 18px !important;
-    }
-
-    /* Code blocks */
-    code, .stCode {
-        font-size: 15px !important;
-    }
-
-    /* Tab labels */
-    .stTabs [data-baseweb="tab"] {
-        font-size: 17px !important;
-    }
-
-    /* Table text */
-    .stDataFrame, .stTable {
-        font-size: 16px !important;
-    }
-
-    /* Info/Warning/Error boxes */
-    .stAlert {
-        font-size: 17px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Sidebar branding and navigation (shared component)
+render_sidebar_header()
 
 st.title("📚 How It Works")
 st.markdown("*Interactive guide to understanding and optimizing your semantic search*")
 
 # Create tabs for different sections
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔍 Retrieval Methods",
+    "📁 Collections",
     "📊 Precision vs Recall",
     "⚙️ Configuration Guide",
     "🧪 A/B Testing",
@@ -244,10 +181,10 @@ with tab1:
         st.markdown("""
         **Available Re-rankers:**
 
-        | Provider | Type | Speed | Quality |
-        |----------|------|-------|---------|
-        | **Cohere** | Cloud API | ⚡ Fast | ⭐⭐⭐ Excellent |
-        | **Jina** | Local Model | 🐢 Slower | ⭐⭐ Good |
+        | Provider | Type | Speed | Quality | Priority |
+        |----------|------|-------|---------|----------|
+        | **Jina** | Local | ⚡ No network | ⭐⭐ Good | 1st |
+        | **Cohere** | Cloud API | Fast | ⭐⭐⭐ Excellent | 2nd |
 
         **When to use:**
         - ✅ Enable for important/production queries
@@ -256,12 +193,242 @@ with tab1:
         - ❌ Disable if latency is critical
         """)
 
-        st.info("💡 The system automatically falls back to Jina if Cohere API key is not set")
+        st.info("💡 Auto mode uses Jina (local) first, falls back to Cohere (cloud)")
 
 # =============================================================================
-# TAB 2: Precision vs Recall
+# TAB 2: Collections
 # =============================================================================
 with tab2:
+    st.header("📁 Document Collections")
+
+    st.markdown("""
+    Collections help you **organize documents** into logical groups for better
+    search results and easier management. Think of them as folders for your
+    semantic search database.
+    """)
+
+    # Why Collections
+    st.subheader("Why Use Collections?")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 20px; border-radius: 10px; color: white; text-align: center;">
+            <h4 style="color: white; margin: 0;">🎯 Focused Search</h4>
+            <p style="margin: 10px 0;">Search within specific document sets</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("Get more relevant results by limiting scope")
+
+    with col2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+                    padding: 20px; border-radius: 10px; color: white; text-align: center;">
+            <h4 style="color: white; margin: 0;">📂 Organization</h4>
+            <p style="margin: 10px 0;">Group related documents together</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("Keep projects, topics, or domains separate")
+
+    with col3:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    padding: 20px; border-radius: 10px; color: white; text-align: center;">
+            <h4 style="color: white; margin: 0;">⚡ Performance</h4>
+            <p style="margin: 10px 0;">Faster searches on smaller sets</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("Reduce noise and improve response time")
+
+    st.divider()
+
+    # How Collections Work
+    st.subheader("How Collections Work")
+
+    st.markdown("""
+    ```
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                     Semantic Search Engine                      │
+    ├─────────────────────────────────────────────────────────────────┤
+    │                                                                 │
+    │  📁 Collection: "Research Papers"                               │
+    │  ├── 📄 paper_neural_networks.pdf (45 chunks)                   │
+    │  ├── 📄 paper_transformers.pdf (62 chunks)                      │
+    │  └── 📄 paper_attention.pdf (38 chunks)                         │
+    │                                                                 │
+    │  📁 Collection: "Product Documentation"                         │
+    │  ├── 📄 api_reference.pdf (120 chunks)                          │
+    │  ├── 📄 user_guide.pdf (85 chunks)                              │
+    │  └── 📄 faq.pdf (30 chunks)                                     │
+    │                                                                 │
+    │  📁 Collection: "Legal Contracts"                               │
+    │  ├── 📄 terms_of_service.pdf (40 chunks)                        │
+    │  └── 📄 privacy_policy.pdf (25 chunks)                          │
+    │                                                                 │
+    └─────────────────────────────────────────────────────────────────┘
+    ```
+    """)
+
+    st.info("💡 Each collection has its own settings for chunk size and overlap, allowing you to optimize for different document types.")
+
+    st.divider()
+
+    # Creating Collections
+    st.subheader("Creating & Managing Collections")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **Creating a Collection:**
+
+        1. Navigate to **📁 Collections** page
+        2. Enter a descriptive name
+        3. (Optional) Add a description
+        4. Configure chunk settings:
+           - **Chunk Size**: Characters per chunk (default: 1000)
+           - **Chunk Overlap**: Overlap between chunks (default: 200)
+        5. Click **Create Collection**
+
+        **Best Practices:**
+        - Use descriptive names ("Q4 Reports", not "docs1")
+        - Group by topic, project, or document type
+        - Consider search patterns when organizing
+        """)
+
+    with col2:
+        st.markdown("""
+        **Managing Documents:**
+
+        1. Select a collection from the list
+        2. Use the **Upload** tab to add PDFs
+        3. View documents in the **Documents** tab
+        4. Delete individual documents as needed
+
+        **Document Features:**
+        - Automatic duplicate detection (by file hash)
+        - Status tracking (Processing → Ready)
+        - Chunk count visibility
+        - File size display
+
+        **Soft Limits:**
+        - 3 collections recommended
+        - 5 documents per collection recommended
+        - (Limits are soft - you can exceed them)
+        """)
+
+    st.divider()
+
+    # Scoped Search
+    st.subheader("🔍 Searching Within Collections")
+
+    st.markdown("""
+    Each collection has its own **Search** tab, allowing you to:
+    """)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **Scoped Search Benefits:**
+
+        - Only searches documents in that collection
+        - Same retrieval settings (presets, alpha, reranking)
+        - Faster results on smaller document sets
+        - More relevant answers for specific topics
+
+        **Example:**
+        > Searching "authentication" in "API Documentation"
+        > collection only returns API auth info, not general
+        > auth concepts from other documents.
+        """)
+
+    with col2:
+        st.markdown("""
+        **Search Settings:**
+
+        All sidebar retrieval settings apply:
+        - Retrieval Profile (presets)
+        - Retrieval Method (semantic/BM25/hybrid)
+        - Alpha (for hybrid mode)
+        - Re-ranking (on/off)
+        - Number of results
+
+        The same answer generation (GPT-4o-mini) is used
+        for consistent response quality.
+        """)
+
+    st.divider()
+
+    # When to Use Collections
+    st.subheader("📋 When to Use Collections")
+
+    configs = {
+        "Scenario": [
+            "Multiple projects with different docs",
+            "Different document types (legal, technical, etc.)",
+            "Separating by time period (Q1, Q2, etc.)",
+            "Different audiences (internal, customer)",
+            "A/B testing document organization",
+            "Single topic, few documents"
+        ],
+        "Use Collections?": [
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "❌ No - use Home page"
+        ],
+        "Reason": [
+            "Keep project context separate",
+            "Optimize chunk settings per type",
+            "Historical search without cross-contamination",
+            "Different access patterns and terminology",
+            "Compare search quality between organizations",
+            "Collections add overhead for simple use cases"
+        ]
+    }
+
+    st.dataframe(configs, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Database Management
+    st.subheader("🗄️ Database Management")
+
+    st.markdown("""
+    The system separates document storage:
+    """)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **Home Page Documents:**
+        - Uploaded directly on the home page
+        - Not part of any collection
+        - Cleared via "Clear All Documents" on home
+        - For quick, single-document searches
+        """)
+
+    with col2:
+        st.markdown("""
+        **Collection Documents:**
+        - Organized within collections
+        - Cleared via "Clear All Collection Documents"
+        - Persist with collection metadata
+        - For organized, multi-document search
+        """)
+
+    st.info("💡 Clearing home page documents does NOT affect collection documents, and vice versa.")
+
+# =============================================================================
+# TAB 3: Precision vs Recall
+# =============================================================================
+with tab3:
     st.header("Understanding Precision vs Recall")
 
     st.markdown("""
@@ -524,9 +691,9 @@ with tab2:
     st.info("💡 Scores are shown in the expandable 'Source' sections of each search result")
 
 # =============================================================================
-# TAB 3: Configuration Guide
+# TAB 4: Configuration Guide
 # =============================================================================
-with tab3:
+with tab4:
     st.header("Configuration Guide")
 
     st.markdown("""
@@ -587,7 +754,9 @@ hybrid_retrieval:
 
   reranking:
     enabled: true
-    provider: "auto"      # "cohere", "jina", or "auto"
+    # "auto" = jina first, then cohere
+    # "jina" = force local, "cohere" = force cloud
+    provider: "auto"
     fetch_k_multiplier: 3  # Fetch 3x candidates for reranking
         """, language="yaml")
 
@@ -640,9 +809,9 @@ hybrid_retrieval:
             """)
 
 # =============================================================================
-# TAB 4: A/B Testing
+# TAB 5: A/B Testing
 # =============================================================================
-with tab4:
+with tab5:
     st.header("🧪 A/B Testing Framework")
 
     st.markdown("""
@@ -686,15 +855,14 @@ with tab4:
     st.subheader("How to Use A/B Testing")
 
     st.markdown("""
-    ### Step 1: Create an Experiment
+    ### Step 1: Upload a Document
 
-    In the main app sidebar, expand "A/B Testing" and create a new experiment:
-    - Give it a descriptive name (e.g., "Technical Docs - v1")
-    - This groups all your test results together
+    A/B testing is enabled after uploading a document to the main Search page.
+    Once uploaded, expand the "A/B Testing" panel.
 
-    ### Step 2: Select Test Variants
+    ### Step 2: All Methods Compared Automatically
 
-    Choose which methods to compare:
+    When you run a comparison, all 4 retrieval methods are tested automatically:
     """)
 
     col1, col2, col3, col4 = st.columns(4)
@@ -712,9 +880,9 @@ with tab4:
         st.caption("Combined + reranking")
 
     st.markdown("""
-    ### Step 3: Run Test Queries
+    ### Step 3: Run Comparisons
 
-    Enter representative queries and click "Run A/B Test":
+    Enter representative queries and click **"Run Comparison"**:
 
     ```
     Example queries to test:
@@ -724,13 +892,12 @@ with tab4:
     - "List all [items]"                     → Tests enumeration
     ```
 
-    ### Step 4: Analyze Results
+    ### Step 4: View Results & Export
 
-    After running multiple queries, check:
-
-    1. **Per-Query Results**: Which method won each query?
-    2. **Aggregate Stats**: Which method has best average performance?
-    3. **Patterns**: Is there a consistent winner?
+    After running queries:
+    - View average score and latency per method
+    - System recommends the best variant automatically
+    - Click "Export Results (CSV)" to download for deeper analysis
 
     ### Step 5: Make a Decision
 
@@ -794,9 +961,9 @@ with tab4:
     """)
 
 # =============================================================================
-# TAB 5: Conversation History
+# TAB 6: Conversation History
 # =============================================================================
-with tab5:
+with tab6:
     st.header("💬 Conversation History")
 
     st.markdown("""
@@ -810,19 +977,19 @@ with tab5:
     st.markdown("""
     ```
     ┌─────────────────────────────────────────────────────────────────┐
-    │ Session: "machine_learning.pdf"                                  │
+    │ Session: "machine_learning.pdf"                                 │
     ├─────────────────────────────────────────────────────────────────┤
-    │ Q1: "What is supervised learning?"                               │
-    │ A1: "Supervised learning is a type of ML where..."               │
-    │                                                                  │
-    │ Q2: "How does it differ from unsupervised?"                      │
-    │     ↓ System detects this is a follow-up                         │
-    │     ↓ Expands query using context from Q1                        │
-    │ A2: "Unlike supervised learning, unsupervised..."                │
-    │                                                                  │
-    │ Q3: "Give me examples"                                           │
-    │     ↓ Uses context from Q1 AND Q2                                │
-    │ A3: "Examples of supervised: regression, classification..."      │
+    │ Q1: "What is supervised learning?"                              │
+    │ A1: "Supervised learning is a type of ML where..."              │
+    │                                                                 │
+    │ Q2: "How does it differ from unsupervised?"                     │
+    │     ↓ System detects this is a follow-up                        │
+    │     ↓ Expands query using context from Q1                       │
+    │ A2: "Unlike supervised learning, unsupervised..."               │
+    │                                                                 │
+    │ Q3: "Give me examples"                                          │
+    │     ↓ Uses context from Q1 AND Q2                               │
+    │ A3: "Examples of supervised: regression, classification..."     │
     └─────────────────────────────────────────────────────────────────┘
     ```
     """)
@@ -909,9 +1076,9 @@ conversation:
         """)
 
 # =============================================================================
-# TAB 6: Quick Reference
+# TAB 7: Quick Reference
 # =============================================================================
-with tab6:
+with tab7:
     st.header("🎯 Quick Reference")
 
     # Recommended Configs by Use Case
@@ -1051,10 +1218,10 @@ with tab6:
     st.code("""
 # .env file
 OPENAI_API_KEY=sk-...      # Required: For embeddings and chat
-COHERE_API_KEY=...         # Optional: For Cohere reranker (falls back to Jina)
+COHERE_API_KEY=...         # Optional: For Cohere reranker (cloud fallback)
     """)
 
-    st.info("💡 Jina reranker works locally without any API key!")
+    st.info("💡 Jina (local) is preferred and requires no API key - just `pip install sentence-transformers`")
 
 # Footer
 st.divider()

@@ -58,7 +58,10 @@ hybrid_retrieval:
   # Re-ranking configuration
   reranking:
     enabled: true
-    # Provider: "cohere", "jina", or "auto" (tries cohere first, then jina)
+    # Provider options:
+    #   - "auto": tries jina (local) first, then cohere (cloud)
+    #   - "jina": force local Jina model (requires sentence-transformers)
+    #   - "cohere": force cloud Cohere API (requires COHERE_API_KEY)
     provider: "auto"
 
     # Cohere model (if using cohere)
