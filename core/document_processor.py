@@ -2,13 +2,14 @@
 Document Processor Module
 
 Handles PDF document loading and text chunking for semantic search.
+Supports collection-scoped indexing for filtered retrieval.
 """
 
 import os
 import uuid
 import tempfile
 import logging
-from typing import List
+from typing import List, Optional, Dict, Any
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -56,12 +57,21 @@ class DocumentProcessor:
 
         logger.info(f"DocumentProcessor initialized with chunk_size={chunk_size}, overlap={chunk_overlap}")
 
-    def process_uploaded_file(self, uploaded_file) -> List[Document]:
+    def process_uploaded_file(
+        self,
+        uploaded_file,
+        collection_id: Optional[str] = None,
+        document_id: Optional[str] = None,
+        extra_metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Document]:
         """
         Process an uploaded PDF file into text chunks.
 
         Args:
             uploaded_file: Streamlit uploaded file object
+            collection_id: Optional collection ID for scoped retrieval
+            document_id: Optional document ID for scoped retrieval
+            extra_metadata: Additional metadata to add to all chunks
 
         Returns:
             List of LangChain Document objects (chunks)
@@ -71,7 +81,11 @@ class DocumentProcessor:
             Exception: If PDF processing fails
 
         Example:
-            >>> chunks = processor.process_uploaded_file(uploaded_file)
+            >>> chunks = processor.process_uploaded_file(
+            ...     uploaded_file,
+            ...     collection_id="abc123",
+            ...     document_id="xyz789"
+            ... )
             >>> print(f"Created {len(chunks)} chunks")
         """
         if not uploaded_file.name.lower().endswith('.pdf'):
@@ -92,9 +106,19 @@ class DocumentProcessor:
             chunks = self.text_splitter.split_documents(docs)
             logger.info(f"Document split into {len(chunks)} chunks")
 
-            # Update source metadata to use original filename (not temp path)
+            # Update metadata for each chunk
             for chunk in chunks:
                 chunk.metadata["source"] = original_filename
+
+                # Add collection/document scoping metadata
+                if collection_id:
+                    chunk.metadata["collection_id"] = collection_id
+                if document_id:
+                    chunk.metadata["document_id"] = document_id
+
+                # Add any extra metadata
+                if extra_metadata:
+                    chunk.metadata.update(extra_metadata)
 
             # Log chunk statistics
             self._log_chunk_stats(chunks)

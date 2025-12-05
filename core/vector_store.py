@@ -168,7 +168,8 @@ class VectorStoreManager:
     def get_retriever(
         self,
         search_type: str = "similarity",
-        search_k: int = 3
+        search_k: int = 3,
+        filter: Optional[dict] = None
     ) -> VectorStoreRetriever:
         """
         Get a retriever for similarity search.
@@ -176,18 +177,38 @@ class VectorStoreManager:
         Args:
             search_type: Type of search ("similarity" or "mmr")
             search_k: Number of documents to retrieve
+            filter: Optional ChromaDB filter dict for scoped search
 
         Returns:
             Configured retriever instance
 
         Example:
+            >>> # Basic retriever
             >>> retriever = manager.get_retriever(search_k=5)
-            >>> docs = retriever.invoke("What is the main topic?")
+
+            >>> # Collection-scoped retriever
+            >>> retriever = manager.get_retriever(
+            ...     search_k=5,
+            ...     filter={"collection_id": "abc123"}
+            ... )
+
+            >>> # Document-scoped retriever
+            >>> retriever = manager.get_retriever(
+            ...     search_k=5,
+            ...     filter={"document_id": {"$in": ["doc1", "doc2"]}}
+            ... )
         """
-        logger.info(f"Creating retriever: type={search_type}, k={search_k}")
+        search_kwargs = {"k": search_k}
+
+        if filter:
+            search_kwargs["filter"] = filter
+            logger.info(f"Creating retriever: type={search_type}, k={search_k}, filter={filter}")
+        else:
+            logger.info(f"Creating retriever: type={search_type}, k={search_k}")
+
         return self.vector_store.as_retriever(
             search_type=search_type,
-            search_kwargs={"k": search_k}
+            search_kwargs=search_kwargs
         )
 
     def get_collection_count(self) -> int:
@@ -281,23 +302,375 @@ class VectorStoreManager:
         indexed_docs = self.get_indexed_documents()
         return filename in indexed_docs
 
-    def search_similar(self, query: str, k: int = 3) -> List[Document]:
+    def search_similar(
+        self,
+        query: str,
+        k: int = 3,
+        filter: Optional[dict] = None
+    ) -> List[Document]:
         """
         Search for similar documents.
 
         Args:
             query: Search query text
             k: Number of results to return
+            filter: Optional ChromaDB filter for scoped search
 
         Returns:
             List of similar Document objects
 
         Example:
+            >>> # Basic search
             >>> docs = manager.search_similar("machine learning", k=5)
-            >>> for doc in docs:
-            ...     print(doc.page_content[:100])
+
+            >>> # Collection-scoped search
+            >>> docs = manager.search_similar(
+            ...     "machine learning",
+            ...     k=5,
+            ...     filter={"collection_id": "abc123"}
+            ... )
         """
-        logger.info(f"Searching for similar documents: query='{query[:50]}...', k={k}")
-        results = self.vector_store.similarity_search(query, k=k)
+        query_preview = query[:50] if len(query) > 50 else query
+        logger.info(f"Searching for similar documents: query='{query_preview}...', k={k}, filter={filter}")
+
+        if filter:
+            results = self.vector_store.similarity_search(query, k=k, filter=filter)
+        else:
+            results = self.vector_store.similarity_search(query, k=k)
+
         logger.info(f"Found {len(results)} similar documents")
         return results
+
+    def search_by_collection(
+        self,
+        query: str,
+        collection_id: str,
+        k: int = 3
+    ) -> List[Document]:
+        """
+        Search within a specific collection.
+
+        Args:
+            query: Search query text
+            collection_id: Collection to search within
+            k: Number of results to return
+
+        Returns:
+            List of similar Document objects from the collection
+
+        Example:
+            >>> docs = manager.search_by_collection(
+            ...     "machine learning",
+            ...     collection_id="abc123",
+            ...     k=5
+            ... )
+        """
+        return self.search_similar(
+            query=query,
+            k=k,
+            filter={"collection_id": collection_id}
+        )
+
+    def search_by_documents(
+        self,
+        query: str,
+        document_ids: List[str],
+        k: int = 3
+    ) -> List[Document]:
+        """
+        Search within specific documents.
+
+        Args:
+            query: Search query text
+            document_ids: List of document IDs to search within
+            k: Number of results to return
+
+        Returns:
+            List of similar Document objects from the specified documents
+
+        Example:
+            >>> docs = manager.search_by_documents(
+            ...     "machine learning",
+            ...     document_ids=["doc1", "doc2"],
+            ...     k=5
+            ... )
+        """
+        if len(document_ids) == 1:
+            filter_dict = {"document_id": document_ids[0]}
+        else:
+            filter_dict = {"document_id": {"$in": document_ids}}
+
+        return self.search_similar(query=query, k=k, filter=filter_dict)
+
+    def delete_by_document_id(self, document_id: str) -> int:
+        """
+        Delete all chunks for a document from the vector store.
+
+        Args:
+            document_id: Document ID whose chunks to delete
+
+        Returns:
+            Number of chunks deleted
+
+        Example:
+            >>> deleted = manager.delete_by_document_id("xyz789")
+            >>> print(f"Deleted {deleted} chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Get IDs of chunks with this document_id
+            results = collection.get(
+                where={"document_id": document_id},
+                include=[]
+            )
+
+            chunk_ids = results.get("ids", [])
+            if not chunk_ids:
+                logger.info(f"No chunks found for document {document_id}")
+                return 0
+
+            # Delete the chunks
+            collection.delete(ids=chunk_ids)
+            logger.info(f"Deleted {len(chunk_ids)} chunks for document {document_id}")
+            return len(chunk_ids)
+
+        except Exception as e:
+            logger.error(f"Error deleting chunks for document {document_id}: {e}")
+            return 0
+
+    def delete_by_collection_id(self, collection_id: str) -> int:
+        """
+        Delete all chunks for a collection from the vector store.
+
+        Args:
+            collection_id: Collection ID whose chunks to delete
+
+        Returns:
+            Number of chunks deleted
+
+        Example:
+            >>> deleted = manager.delete_by_collection_id("abc123")
+            >>> print(f"Deleted {deleted} chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Get IDs of chunks with this collection_id
+            results = collection.get(
+                where={"collection_id": collection_id},
+                include=[]
+            )
+
+            chunk_ids = results.get("ids", [])
+            if not chunk_ids:
+                logger.info(f"No chunks found for collection {collection_id}")
+                return 0
+
+            # Delete the chunks
+            collection.delete(ids=chunk_ids)
+            logger.info(f"Deleted {len(chunk_ids)} chunks for collection {collection_id}")
+            return len(chunk_ids)
+
+        except Exception as e:
+            logger.error(f"Error deleting chunks for collection {collection_id}: {e}")
+            return 0
+
+    def get_chunks_by_document(self, document_id: str) -> List[Document]:
+        """
+        Get all chunks for a specific document.
+
+        Args:
+            document_id: Document ID to get chunks for
+
+        Returns:
+            List of Document chunks
+
+        Example:
+            >>> chunks = manager.get_chunks_by_document("xyz789")
+            >>> print(f"Found {len(chunks)} chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+            results = collection.get(
+                where={"document_id": document_id},
+                include=["documents", "metadatas"]
+            )
+
+            chunks = []
+            for i, content in enumerate(results.get("documents", [])):
+                metadata = results.get("metadatas", [])[i] if results.get("metadatas") else {}
+                chunks.append(Document(page_content=content, metadata=metadata))
+
+            logger.debug(f"Found {len(chunks)} chunks for document {document_id}")
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error getting chunks for document {document_id}: {e}")
+            return []
+
+    def clear_non_collection_documents(self) -> int:
+        """
+        Clear all documents that are NOT part of any collection.
+
+        These are legacy documents uploaded via the home page file uploader
+        that don't have a collection_id in their metadata.
+
+        Returns:
+            Number of chunks deleted
+
+        Example:
+            >>> deleted = manager.clear_non_collection_documents()
+            >>> print(f"Deleted {deleted} legacy chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Get all documents
+            all_results = collection.get(include=["metadatas"])
+            all_ids = all_results.get("ids", [])
+            all_metadatas = all_results.get("metadatas", [])
+
+            # Find IDs without collection_id
+            ids_to_delete = []
+            for i, metadata in enumerate(all_metadatas):
+                if not metadata or "collection_id" not in metadata:
+                    ids_to_delete.append(all_ids[i])
+
+            if not ids_to_delete:
+                logger.info("No non-collection documents found to delete")
+                return 0
+
+            # Delete in batches (ChromaDB has limits)
+            batch_size = 5000
+            total_deleted = 0
+            for i in range(0, len(ids_to_delete), batch_size):
+                batch = ids_to_delete[i:i + batch_size]
+                collection.delete(ids=batch)
+                total_deleted += len(batch)
+
+            logger.info(f"Deleted {total_deleted} non-collection chunks")
+            return total_deleted
+
+        except Exception as e:
+            logger.error(f"Error clearing non-collection documents: {e}", exc_info=True)
+            return 0
+
+    def clear_all_collection_documents(self) -> int:
+        """
+        Clear all documents that ARE part of collections.
+
+        These are documents with a collection_id in their metadata,
+        uploaded via the Collections page.
+
+        Returns:
+            Number of chunks deleted
+
+        Example:
+            >>> deleted = manager.clear_all_collection_documents()
+            >>> print(f"Deleted {deleted} collection chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Get all documents
+            all_results = collection.get(include=["metadatas"])
+            all_ids = all_results.get("ids", [])
+            all_metadatas = all_results.get("metadatas", [])
+
+            # Find IDs with collection_id
+            ids_to_delete = []
+            for i, metadata in enumerate(all_metadatas):
+                if metadata and "collection_id" in metadata:
+                    ids_to_delete.append(all_ids[i])
+
+            if not ids_to_delete:
+                logger.info("No collection documents found to delete")
+                return 0
+
+            # Delete in batches (ChromaDB has limits)
+            batch_size = 5000
+            total_deleted = 0
+            for i in range(0, len(ids_to_delete), batch_size):
+                batch = ids_to_delete[i:i + batch_size]
+                collection.delete(ids=batch)
+                total_deleted += len(batch)
+
+            logger.info(f"Deleted {total_deleted} collection chunks")
+            return total_deleted
+
+        except Exception as e:
+            logger.error(f"Error clearing collection documents: {e}", exc_info=True)
+            return 0
+
+    def get_non_collection_count(self) -> int:
+        """
+        Get count of chunks NOT in any collection.
+
+        Returns:
+            Number of non-collection chunks
+        """
+        try:
+            collection = self.vector_store._collection
+            all_results = collection.get(include=["metadatas"])
+            all_metadatas = all_results.get("metadatas", [])
+
+            count = sum(1 for m in all_metadatas if not m or "collection_id" not in m)
+            return count
+        except Exception as e:
+            logger.error(f"Error getting non-collection count: {e}")
+            return 0
+
+    def get_collection_documents_count(self) -> int:
+        """
+        Get count of chunks IN collections.
+
+        Returns:
+            Number of collection chunks
+        """
+        try:
+            collection = self.vector_store._collection
+            all_results = collection.get(include=["metadatas"])
+            all_metadatas = all_results.get("metadatas", [])
+
+            count = sum(1 for m in all_metadatas if m and "collection_id" in m)
+            return count
+        except Exception as e:
+            logger.error(f"Error getting collection documents count: {e}")
+            return 0
+
+    def get_all_documents(self, collection_id: Optional[str] = None) -> List[Document]:
+        """
+        Get all documents from the vector store.
+
+        Args:
+            collection_id: Optional collection ID to filter by.
+                          If None, returns non-collection documents.
+
+        Returns:
+            List of Document objects
+        """
+        try:
+            collection = self.vector_store._collection
+            all_results = collection.get(include=["documents", "metadatas"])
+
+            documents = []
+            contents = all_results.get("documents", [])
+            metadatas = all_results.get("metadatas", [])
+
+            for content, metadata in zip(contents, metadatas):
+                if collection_id:
+                    # Filter by specific collection
+                    if metadata and metadata.get("collection_id") == collection_id:
+                        documents.append(Document(page_content=content, metadata=metadata or {}))
+                else:
+                    # Get non-collection documents only
+                    if not metadata or "collection_id" not in metadata:
+                        documents.append(Document(page_content=content, metadata=metadata or {}))
+
+            logger.info(f"Retrieved {len(documents)} documents from vector store")
+            return documents
+
+        except Exception as e:
+            logger.error(f"Error getting all documents: {e}", exc_info=True)
+            return []

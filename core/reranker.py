@@ -346,20 +346,28 @@ class RerankerFactory:
         """
         Get first available re-ranker.
 
-        Tries Cohere first (cloud, better quality), then Jina (local).
+        Tries Jina first (local, no API cost), then Cohere (cloud).
 
         Returns:
             Available re-ranker instance or None if none available
         """
-        # Try Cohere first (typically better quality)
-        cohere_reranker = CohereReranker()
-        if cohere_reranker.is_available():
-            return cohere_reranker
+        logger.info("🔍 Auto-selecting reranker...")
 
-        # Fall back to Jina (local, no API key needed)
+        # Try Jina first (local, no API cost, no latency)
         jina_reranker = JinaReranker()
         if jina_reranker.is_available():
+            logger.info("✅ RERANKER SELECTED: Jina (local)")
             return jina_reranker
+        else:
+            logger.info("❌ Jina not available (missing sentence-transformers)")
 
-        logger.warning("No reranker available. Install cohere or sentence-transformers.")
+        # Fall back to Cohere (cloud API)
+        cohere_reranker = CohereReranker()
+        if cohere_reranker.is_available():
+            logger.info("✅ RERANKER SELECTED: Cohere (cloud)")
+            return cohere_reranker
+        else:
+            logger.info("❌ Cohere not available (missing COHERE_API_KEY)")
+
+        logger.warning("⚠️ NO RERANKER AVAILABLE. Install sentence-transformers or set COHERE_API_KEY.")
         return None
