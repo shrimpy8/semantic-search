@@ -59,7 +59,7 @@ class VectorStoreManager:
     def __init__(
         self,
         embedding_model_name: str = "text-embedding-3-large",
-        collection_name: str = "semantic_search_docs",
+        collection_name: str = "semantic_search_docs_streamlit",
         persist_directory: str = "./chroma/db",
         use_docker: bool = False,
         chroma_host: str = "localhost",
@@ -364,11 +364,15 @@ class VectorStoreManager:
             ...     collection_id="abc123",
             ...     k=5
             ... )
+
+        Note:
+            Uses explicit $eq operator for ChromaDB filter compatibility.
         """
+        # ChromaDB requires explicit $eq operator for equality filters
         return self.search_similar(
             query=query,
             k=k,
-            filter={"collection_id": collection_id}
+            filter={"collection_id": {"$eq": collection_id}}
         )
 
     def search_by_documents(
@@ -394,9 +398,13 @@ class VectorStoreManager:
             ...     document_ids=["doc1", "doc2"],
             ...     k=5
             ... )
+
+        Note:
+            Uses explicit $eq/$in operators for ChromaDB filter compatibility.
         """
+        # ChromaDB requires explicit operators for filters
         if len(document_ids) == 1:
-            filter_dict = {"document_id": document_ids[0]}
+            filter_dict = {"document_id": {"$eq": document_ids[0]}}
         else:
             filter_dict = {"document_id": {"$in": document_ids}}
 
@@ -415,13 +423,16 @@ class VectorStoreManager:
         Example:
             >>> deleted = manager.delete_by_document_id("xyz789")
             >>> print(f"Deleted {deleted} chunks")
+
+        Note:
+            Uses explicit $eq operator for ChromaDB filter compatibility.
         """
         try:
             collection = self.vector_store._collection
 
-            # Get IDs of chunks with this document_id
+            # ChromaDB requires explicit $eq operator for equality filters
             results = collection.get(
-                where={"document_id": document_id},
+                where={"document_id": {"$eq": document_id}},
                 include=[]
             )
 
@@ -457,8 +468,9 @@ class VectorStoreManager:
             collection = self.vector_store._collection
 
             # Get IDs of chunks with this collection_id
+            # ChromaDB requires explicit $eq operator for equality filters
             results = collection.get(
-                where={"collection_id": collection_id},
+                where={"collection_id": {"$eq": collection_id}},
                 include=[]
             )
 
@@ -474,6 +486,46 @@ class VectorStoreManager:
 
         except Exception as e:
             logger.error(f"Error deleting chunks for collection {collection_id}: {e}")
+            return 0
+
+    def delete_by_source(self, source: str) -> int:
+        """
+        Delete all chunks with a specific source (filename) from the vector store.
+
+        Args:
+            source: Source filename whose chunks to delete
+
+        Returns:
+            Number of chunks deleted
+
+        Example:
+            >>> deleted = manager.delete_by_source("document.pdf")
+            >>> print(f"Deleted {deleted} chunks")
+
+        Note:
+            Uses explicit $eq operator for ChromaDB filter compatibility.
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # ChromaDB requires explicit $eq operator for equality filters
+            results = collection.get(
+                where={"source": {"$eq": source}},
+                include=[]
+            )
+
+            chunk_ids = results.get("ids", [])
+            if not chunk_ids:
+                logger.info(f"No chunks found for source {source}")
+                return 0
+
+            # Delete the chunks
+            collection.delete(ids=chunk_ids)
+            logger.info(f"Deleted {len(chunk_ids)} chunks for source {source}")
+            return len(chunk_ids)
+
+        except Exception as e:
+            logger.error(f"Error deleting chunks for source {source}: {e}")
             return 0
 
     def get_chunks_by_document(self, document_id: str) -> List[Document]:
@@ -492,8 +544,9 @@ class VectorStoreManager:
         """
         try:
             collection = self.vector_store._collection
+            # ChromaDB requires explicit $eq operator for equality filters
             results = collection.get(
-                where={"document_id": document_id},
+                where={"document_id": {"$eq": document_id}},
                 include=["documents", "metadatas"]
             )
 

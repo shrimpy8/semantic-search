@@ -21,7 +21,7 @@ document_processing:
 # Vector Store Configuration
 vector_store:
   provider: "chroma"
-  collection_name: "semantic_search_docs"
+  collection_name: "semantic_search_docs_streamlit"
   persist_directory: "./chroma/db"
 
   # ChromaDB connection mode

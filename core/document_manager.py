@@ -7,7 +7,7 @@ processing, deduplication via hash, and cascade deletion of chunks.
 
 import hashlib
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 
 from core.models.document import Document, DocumentStatus
@@ -21,6 +21,10 @@ from core.models.responses import ListResponse, DeletedResponse, OperationResult
 from core.storage import JSONStorage, COLLECTIONS_FILE, DOCUMENTS_FILE
 
 logger = logging.getLogger(__name__)
+
+# Type alias for BM25 cache invalidation callback
+# Callback receives collection_id to invalidate the BM25 index for that collection
+BM25InvalidationCallback = Callable[[str], None]
 
 
 class DocumentManager:
@@ -50,6 +54,7 @@ class DocumentManager:
         storage: Optional[JSONStorage] = None,
         data_dir: str = "./data",
         vector_store=None,
+        on_document_change: Optional[BM25InvalidationCallback] = None,
     ):
         """
         Initialize the document manager.
@@ -58,9 +63,18 @@ class DocumentManager:
             storage: Optional JSONStorage instance
             data_dir: Directory for JSON storage
             vector_store: Optional VectorStoreManager for chunk operations
+            on_document_change: Optional callback for BM25 cache invalidation.
+                Called with collection_id whenever a document is added or deleted.
+                This allows the hybrid retriever to invalidate stale BM25 indexes.
+
+        Example:
+            >>> def invalidate_bm25(collection_id: str):
+            ...     hybrid_retriever.clear_bm25_cache(collection_id)
+            >>> manager = DocumentManager(on_document_change=invalidate_bm25)
         """
         self.storage = storage or JSONStorage(data_dir=data_dir)
         self.vector_store = vector_store
+        self._on_document_change = on_document_change
         logger.info("DocumentManager initialized")
 
     def add(
@@ -189,6 +203,10 @@ class DocumentManager:
 
         total_elapsed = time.time() - start_time
         logger.info(f"[DM.add] COMPLETE - document {document.id} ({filename}) in {total_elapsed:.3f}s")
+
+        # Invoke BM25 cache invalidation callback
+        # This ensures the BM25 index is rebuilt on next search to include this document
+        self._notify_document_change(collection_id)
 
         return OperationResult(
             success=True,
@@ -381,6 +399,7 @@ class DocumentManager:
             >>> print(f"Deleted: {response.deleted}")
         """
         document = self.get(document_id)
+        collection_id = document.collection_id
 
         # Delete chunks from vector store if available
         if self.vector_store:
@@ -392,6 +411,10 @@ class DocumentManager:
         # Delete document record
         self.storage.delete(DOCUMENTS_FILE, document_id)
         logger.info(f"Deleted document: {document_id} ({document.filename})")
+
+        # Invoke BM25 cache invalidation callback
+        # This ensures deleted document is excluded from next BM25 search
+        self._notify_document_change(collection_id)
 
         return DeletedResponse(id=document_id, object="document")
 
@@ -512,3 +535,28 @@ class DocumentManager:
         except Exception as e:
             logger.error(f"Error deleting chunks for document {document.id}: {e}")
             return 0
+
+    def _notify_document_change(self, collection_id: str) -> None:
+        """
+        Notify that a document has been added or deleted.
+
+        This triggers BM25 cache invalidation so the index is rebuilt
+        on the next search to reflect the current document state.
+
+        Args:
+            collection_id: ID of the collection that was modified
+
+        Note:
+            This is a no-op if no callback was registered during initialization.
+            The callback is expected to handle its own error handling.
+        """
+        if self._on_document_change is None:
+            return
+
+        try:
+            logger.debug(f"Invoking BM25 cache invalidation for collection {collection_id}")
+            self._on_document_change(collection_id)
+            logger.info(f"BM25 cache invalidated for collection {collection_id}")
+        except Exception as e:
+            # Log but don't fail - cache invalidation is not critical to the operation
+            logger.error(f"BM25 cache invalidation failed for collection {collection_id}: {e}")

@@ -201,10 +201,10 @@ class TestSemanticSearch:
             method=RetrievalMethod.SEMANTIC
         ))
 
-        # Verify filter was passed
+        # Verify filter was passed (ChromaDB requires $eq operator)
         mock_vector_store.search_similar.assert_called_once()
         call_kwargs = mock_vector_store.search_similar.call_args[1]
-        assert call_kwargs["filter"] == {"collection_id": "col-1"}
+        assert call_kwargs["filter"] == {"collection_id": {"$eq": "col-1"}}
 
     def test_semantic_search_scores(self, search_manager):
         """Test that semantic search results have scores."""

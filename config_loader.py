@@ -93,7 +93,7 @@ class ConfigLoader:
 
     def get_collection_name(self) -> str:
         """Get ChromaDB collection name."""
-        return self.config.get("vector_store", {}).get("collection_name", "semantic_search_docs")
+        return self.config.get("vector_store", {}).get("collection_name", "semantic_search_docs_streamlit")
 
     def get_persist_directory(self) -> str:
         """Get ChromaDB persistence directory."""

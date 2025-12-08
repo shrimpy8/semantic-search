@@ -216,22 +216,37 @@ class TestSearchModels:
         assert data["rerank_score"] == 0.90
 
     def test_search_request_filter_collection(self):
-        """Test filter generation for collection scope."""
+        """Test filter generation for collection scope.
+
+        Note: ChromaDB requires explicit $eq operator for equality filters.
+        Direct equality like {"field": "value"} may silently fail.
+        """
         request = SearchRequest(
             query="test query",
             collection_id="col-123"
         )
         filter_dict = request.get_filter()
-        assert filter_dict == {"collection_id": "col-123"}
+        # ChromaDB requires explicit $eq operator
+        assert filter_dict == {"collection_id": {"$eq": "col-123"}}
 
     def test_search_request_filter_documents(self):
-        """Test filter generation for document scope."""
+        """Test filter generation for document scope with multiple docs."""
         request = SearchRequest(
             query="test query",
             document_ids=["doc-1", "doc-2"]
         )
         filter_dict = request.get_filter()
         assert filter_dict == {"document_id": {"$in": ["doc-1", "doc-2"]}}
+
+    def test_search_request_filter_single_document(self):
+        """Test filter generation for single document scope uses $eq."""
+        request = SearchRequest(
+            query="test query",
+            document_ids=["doc-1"]
+        )
+        filter_dict = request.get_filter()
+        # Single document should use $eq, not $in
+        assert filter_dict == {"document_id": {"$eq": "doc-1"}}
 
     def test_search_request_filter_combined(self):
         """Test filter generation for combined scope."""

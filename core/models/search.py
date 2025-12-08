@@ -148,12 +148,14 @@ class SearchRequest:
         """
         conditions = []
 
+        # ChromaDB requires explicit operators ($eq, $in) for all filter conditions
+        # Direct equality like {"field": "value"} may silently fail
         if self.collection_id:
-            conditions.append({"collection_id": self.collection_id})
+            conditions.append({"collection_id": {"$eq": self.collection_id}})
 
         if self.document_ids:
             if len(self.document_ids) == 1:
-                conditions.append({"document_id": self.document_ids[0]})
+                conditions.append({"document_id": {"$eq": self.document_ids[0]}})
             else:
                 conditions.append({"document_id": {"$in": self.document_ids}})
 

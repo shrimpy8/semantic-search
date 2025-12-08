@@ -24,6 +24,63 @@ render_sidebar_header()
 st.title("📚 How It Works")
 st.markdown("*Interactive guide to understanding and optimizing your semantic search*")
 
+# Brief Overview Section
+st.subheader("🔄 How Search Works")
+st.markdown("""
+When you ask a question, here's what happens behind the scenes:
+""")
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 2rem;">📄</div>
+        <div style="font-weight: bold;">1. Chunk</div>
+        <div style="font-size: 0.8rem; color: gray;">Document split into searchable pieces</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 2rem;">🧮</div>
+        <div style="font-weight: bold;">2. Embed</div>
+        <div style="font-size: 0.8rem; color: gray;">OpenAI creates vector embeddings</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 2rem;">🔀</div>
+        <div style="font-weight: bold;">3. Hybrid Search</div>
+        <div style="font-size: 0.8rem; color: gray;">BM25 + Semantic combined</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col4:
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 2rem;">🏆</div>
+        <div style="font-weight: bold;">4. Rerank</div>
+        <div style="font-size: 0.8rem; color: gray;">Jina cross-encoder refines results</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col5:
+    st.markdown("""
+    <div style="text-align: center; padding: 10px;">
+        <div style="font-size: 2rem;">💬</div>
+        <div style="font-weight: bold;">5. Answer</div>
+        <div style="font-size: 0.8rem; color: gray;">GPT-4o-mini generates response</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.caption("This is a RAG (Retrieval-Augmented Generation) pipeline — the LLM only answers based on your documents, not general knowledge.")
+
+st.divider()
+
 # Create tabs for different sections
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔍 Retrieval Methods",

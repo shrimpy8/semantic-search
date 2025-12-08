@@ -101,6 +101,10 @@ def initialize_session_state():
     if 'documents' not in st.session_state:
         st.session_state.documents = []
 
+    # Flag for triggering sidebar refresh after upload
+    if 'needs_sidebar_refresh' not in st.session_state:
+        st.session_state.needs_sidebar_refresh = False
+
     # Check for existing documents and restore state on restart
     if 'processed_file' not in st.session_state:
         existing_doc_count = st.session_state.vector_store_manager.get_non_collection_count()
@@ -405,12 +409,24 @@ def run_ab_comparison(query: str):
     )
 
 
-def process_uploaded_file(uploaded_file):
-    """Process an uploaded PDF file."""
+def process_uploaded_file(uploaded_file, force_reindex: bool = False):
+    """Process an uploaded PDF file.
+
+    Args:
+        uploaded_file: Streamlit uploaded file object
+        force_reindex: If True, delete existing chunks before re-indexing
+    """
     if not uploaded_file.name.lower().endswith('.pdf'):
         st.error("Only PDF files are currently supported.")
         logger.warning(f"Invalid file type uploaded: {uploaded_file.name}")
         return
+
+    # Delete existing chunks if force re-indexing
+    if force_reindex:
+        with st.spinner("Removing old document data..."):
+            deleted = st.session_state.vector_store_manager.delete_by_source(uploaded_file.name)
+            if deleted > 0:
+                logger.info(f"Deleted {deleted} existing chunks for {uploaded_file.name}")
 
     with st.spinner("Processing document..."):
         try:
@@ -436,22 +452,16 @@ def process_uploaded_file(uploaded_file):
                     chunks
                 )
 
-            # Display chunk information in three-column layout
+            # Display processing results in a clean horizontal layout
+            st.success(f"✅ Document processed: **{len(chunks)}** chunks created, **{len(chroma_ids)}** embeddings indexed")
+
+            # Chunk details in a separate expander (not in narrow column)
             chunk_info = doc_processor.get_chunk_info(chunks)
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.success(f"**{len(chunks)}** chunks created")
-
-            with col2:
-                with st.expander("View chunk details", expanded=False):
-                    for info in chunk_info[:5]:  # Show first 5
-                        st.write(f"Chunk {info['index']}: {info['size']} chars")
-                    if len(chunk_info) > 5:
-                        st.write(f"... and {len(chunk_info) - 5} more")
-
-            with col3:
-                st.success(f"**{len(chroma_ids)}** embeddings indexed")
+            with st.expander("View chunk details", expanded=False):
+                for info in chunk_info[:5]:  # Show first 5
+                    st.write(f"Chunk {info['index']}: {info['size']} chars")
+                if len(chunk_info) > 5:
+                    st.write(f"... and {len(chunk_info) - 5} more")
 
             # Initialize hybrid retriever
             semantic_retriever = st.session_state.vector_store_manager.get_retriever(
@@ -476,6 +486,7 @@ def process_uploaded_file(uploaded_file):
 
             # Update session state
             st.session_state.processed_file = True
+            st.session_state.needs_sidebar_refresh = True
             logger.info(f"File processing complete: {uploaded_file.name}")
 
         except ValueError as e:
@@ -685,6 +696,11 @@ def main():
         initial_sidebar_state="expanded"
     )
 
+    # Check if sidebar needs refresh (after document upload)
+    if st.session_state.get('needs_sidebar_refresh', False):
+        st.session_state.needs_sidebar_refresh = False
+        st.rerun()
+
     # Apply shared page styles (hide nav + base styles)
     apply_page_styles()
 
@@ -725,14 +741,15 @@ def main():
     if uploaded_file is not None:
         # Check if file already exists in database
         if st.session_state.vector_store_manager.document_exists(uploaded_file.name):
-            st.warning(
-                f"⚠️ **'{uploaded_file.name}'** already exists in the database. "
-                "You can clear the database from the sidebar to re-index, or upload a different file."
+            st.info(
+                f"ℹ️ **'{uploaded_file.name}'** is already indexed and ready to search! "
+                "Enter a question below to search this document."
             )
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                if st.button("Process Anyway", type="secondary"):
-                    process_uploaded_file(uploaded_file)
+            # Offer option to re-index if they really want to
+            with st.expander("Re-index this document?"):
+                st.caption("Only needed if the file content has changed.")
+                if st.button("Re-index Document", type="secondary"):
+                    process_uploaded_file(uploaded_file, force_reindex=True)
         else:
             process_uploaded_file(uploaded_file)
 
@@ -745,6 +762,7 @@ def main():
     # Question Answering Interface
     st.markdown("---")
     st.subheader("Ask Questions About Your Document")
+    st.caption("Search includes all uploaded documents and collections.")
 
     # Inline question input (directly under header)
     col1, col2 = st.columns([5, 1])

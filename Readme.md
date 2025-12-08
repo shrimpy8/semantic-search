@@ -5,6 +5,22 @@ A RAG (Retrieval Augmented Generation) application built with LangChain, ChromaD
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+## 🔄 How Search Works
+
+When you ask a question, the system follows this RAG (Retrieval-Augmented Generation) pipeline:
+
+![How Search Works](screenshots/How_Search_Works.png)
+
+| Step | Component | Description |
+|------|-----------|-------------|
+| 1. **Chunk** | Document Processor | PDF split into searchable text pieces |
+| 2. **Embed** | OpenAI | Creates vector embeddings (text-embedding-3-large) |
+| 3. **Hybrid Search** | BM25 + Semantic | Combines keyword and meaning-based search |
+| 4. **Rerank** | Jina (local) | Cross-encoder refines result relevance |
+| 5. **Answer** | GPT-4o-mini | Generates response based only on your documents |
+
+> **Note**: The LLM only answers based on your uploaded documents, not general knowledge. Search on the home page includes all documents and collections.
+
 ## ✨ Features
 
 ### Core Features
@@ -431,6 +447,7 @@ pytest tests/ --cov=. --cov-report=html
 - `tests/test_ab_testing.py` - A/B testing framework
 - `tests/test_conversation.py` - Conversation history
 - `tests/test_config_loader.py` - Configuration loading
+- `tests/test_integration.py` - Real ChromaDB integration tests (document lifecycle, orphan cleanup)
 
 ### Code Style
 

@@ -137,7 +137,7 @@ class TestVectorStoreManager:
         manager = VectorStoreManager()
 
         assert manager.embedding_model_name == "text-embedding-3-large"
-        assert manager.collection_name == "semantic_search_docs"
+        assert manager.collection_name == "semantic_search_docs_streamlit"
         assert manager.persist_directory == "./chroma/db"
 
     @patch('core.vector_store.OpenAIEmbeddings')

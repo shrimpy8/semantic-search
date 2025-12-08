@@ -49,6 +49,7 @@ class CollectionManager:
         storage: Optional[JSONStorage] = None,
         data_dir: str = "./data",
         chroma_client=None,
+        vector_store=None,
     ):
         """
         Initialize the collection manager.
@@ -56,10 +57,17 @@ class CollectionManager:
         Args:
             storage: Optional JSONStorage instance (created if not provided)
             data_dir: Directory for JSON storage
-            chroma_client: Optional ChromaDB client for vector store integration
+            chroma_client: Optional ChromaDB client for vector store integration (deprecated)
+            vector_store: Optional EnhancedVectorStore for chunk management (preferred)
+
+        Note:
+            The vector_store parameter is preferred over chroma_client for proper
+            chunk cleanup during collection deletion. If only chroma_client is provided,
+            chunk deletion will use metadata filters directly on the underlying collection.
         """
         self.storage = storage or JSONStorage(data_dir=data_dir)
         self.chroma_client = chroma_client
+        self.vector_store = vector_store
         logger.info("CollectionManager initialized")
 
     def create(
@@ -372,21 +380,27 @@ class CollectionManager:
                 param="force",
             )
 
-        # Delete associated documents if force
+        # CRITICAL: Delete ChromaDB chunks FIRST before deleting JSON records
+        # This ensures no orphan chunks remain if the process is interrupted
+        # The old approach tried to delete a named collection that doesn't exist -
+        # all chunks are stored in a shared collection with collection_id in metadata
+        chunks_deleted = 0
+        if self.vector_store or self.chroma_client:
+            try:
+                chunks_deleted = self._delete_collection_chunks(collection_id)
+                logger.info(f"Deleted {chunks_deleted} chunks from ChromaDB for collection {collection_id}")
+            except Exception as e:
+                logger.error(f"Failed to delete ChromaDB chunks for collection {collection_id}: {e}")
+                # Continue with deletion - chunks may be orphaned but collection should still be removed
+
+        # Delete associated documents from JSON storage
         if doc_count > 0:
             deleted_docs = self.storage.delete_by_field(
                 DOCUMENTS_FILE, "collection_id", collection_id
             )
             logger.info(f"Deleted {deleted_docs} documents from collection {collection_id}")
 
-        # Delete from ChromaDB if client available
-        if self.chroma_client:
-            try:
-                self._delete_chroma_collection(collection_id)
-            except Exception as e:
-                logger.error(f"Failed to delete ChromaDB collection: {e}")
-
-        # Delete collection
+        # Delete collection record
         self.storage.delete(COLLECTIONS_FILE, collection_id)
         logger.info(f"Deleted collection: {collection_id}")
 
@@ -446,14 +460,71 @@ class CollectionManager:
         )
         logger.info(f"Created ChromaDB collection: {chroma_name}")
 
-    def _delete_chroma_collection(self, collection_id: str) -> None:
-        """Delete a ChromaDB collection."""
-        if not self.chroma_client:
-            return
+    def _delete_collection_chunks(self, collection_id: str) -> int:
+        """
+        Delete all chunks for a collection from the shared vector store.
 
-        chroma_name = f"collection_{collection_id.replace('-', '_')}"
+        All document chunks are stored in a single shared ChromaDB collection
+        (semantic_search_docs_streamlit) with collection_id in their metadata - NOT in
+        separate per-collection ChromaDB collections.
+
+        Args:
+            collection_id: ID of the collection whose chunks should be deleted
+
+        Returns:
+            Number of chunks deleted
+
+        Note:
+            This method prefers using vector_store.delete_by_collection_id() if
+            available, falling back to direct ChromaDB operations if only
+            chroma_client is provided.
+        """
+        # Prefer using EnhancedVectorStore if available (cleaner abstraction)
+        if self.vector_store:
+            return self.vector_store.delete_by_collection_id(collection_id)
+
+        # Fallback: Direct ChromaDB operations if only chroma_client is available
+        if not self.chroma_client:
+            logger.warning("No vector store or chroma_client available for chunk deletion")
+            return 0
+
         try:
-            self.chroma_client.delete_collection(name=chroma_name)
-            logger.info(f"Deleted ChromaDB collection: {chroma_name}")
+            # Get the shared collection where all chunks are stored
+            collection = self.chroma_client.get_or_create_collection(
+                name="semantic_search_docs_streamlit"
+            )
+
+            # Find all chunks with this collection_id in metadata
+            # ChromaDB requires explicit $eq operator for equality filters
+            results = collection.get(
+                where={"collection_id": {"$eq": collection_id}},
+                include=[]
+            )
+
+            chunk_ids = results.get("ids", [])
+            if not chunk_ids:
+                logger.info(f"No chunks found for collection {collection_id}")
+                return 0
+
+            # Delete all matching chunks
+            collection.delete(ids=chunk_ids)
+            logger.info(f"Deleted {len(chunk_ids)} chunks for collection {collection_id}")
+            return len(chunk_ids)
+
         except Exception as e:
-            logger.warning(f"ChromaDB collection {chroma_name} not found: {e}")
+            logger.error(f"Error deleting chunks for collection {collection_id}: {e}")
+            raise
+
+    def _delete_chroma_collection(self, collection_id: str) -> None:
+        """
+        DEPRECATED: Use _delete_collection_chunks instead.
+
+        This method incorrectly tried to delete a named ChromaDB collection
+        that doesn't exist. All chunks are stored in a shared collection.
+        Kept for backwards compatibility but logs a deprecation warning.
+        """
+        logger.warning(
+            f"_delete_chroma_collection is deprecated - use _delete_collection_chunks. "
+            f"Collection {collection_id}"
+        )
+        self._delete_collection_chunks(collection_id)

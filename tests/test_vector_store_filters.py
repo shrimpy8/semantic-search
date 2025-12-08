@@ -100,7 +100,8 @@ class TestSearchRequestFilters:
         filter_dict = request.get_filter()
 
         assert filter_dict is not None
-        assert filter_dict.get("collection_id") == "col-123"
+        # ChromaDB requires explicit $eq operator for equality filters
+        assert filter_dict.get("collection_id") == {"$eq": "col-123"}
 
     def test_single_document_filter(self):
         """Test filter generation for single document scope."""
@@ -114,7 +115,8 @@ class TestSearchRequestFilters:
         filter_dict = request.get_filter()
 
         assert filter_dict is not None
-        assert filter_dict.get("document_id") == "doc-456"
+        # ChromaDB requires explicit $eq operator for single document filter
+        assert filter_dict.get("document_id") == {"$eq": "doc-456"}
 
     def test_multiple_documents_filter(self):
         """Test filter generation for multiple documents scope."""
@@ -239,11 +241,11 @@ class TestVectorStoreManagerMethods:
                 k=5
             )
 
-            # Verify correct filter was used
+            # Verify correct filter was used (ChromaDB requires $eq operator)
             mock_chroma.similarity_search.assert_called_once_with(
                 "test query",
                 k=5,
-                filter={"collection_id": "col-123"}
+                filter={"collection_id": {"$eq": "col-123"}}
             )
 
     def test_search_by_documents_single(self, mock_vector_store):
@@ -262,11 +264,11 @@ class TestVectorStoreManagerMethods:
                 k=5
             )
 
-            # Verify single document filter (not $in)
+            # Verify single document filter (uses $eq, not $in)
             mock_chroma.similarity_search.assert_called_once_with(
                 "test query",
                 k=5,
-                filter={"document_id": "doc-1"}
+                filter={"document_id": {"$eq": "doc-1"}}
             )
 
     def test_search_by_documents_multiple(self, mock_vector_store):
@@ -304,9 +306,9 @@ class TestVectorStoreManagerMethods:
 
             deleted = manager.delete_by_document_id("doc-1")
 
-            # Verify get was called with correct filter
+            # Verify get was called with correct filter (ChromaDB requires $eq operator)
             mock_collection.get.assert_called_once_with(
-                where={"document_id": "doc-1"},
+                where={"document_id": {"$eq": "doc-1"}},
                 include=[]
             )
 
@@ -348,9 +350,9 @@ class TestVectorStoreManagerMethods:
 
             deleted = manager.delete_by_collection_id("col-1")
 
-            # Verify get was called with correct filter
+            # Verify get was called with correct filter (ChromaDB requires $eq operator)
             mock_collection.get.assert_called_once_with(
-                where={"collection_id": "col-1"},
+                where={"collection_id": {"$eq": "col-1"}},
                 include=[]
             )
 
@@ -371,9 +373,9 @@ class TestVectorStoreManagerMethods:
 
             chunks = manager.get_chunks_by_document("doc-1")
 
-            # Verify get was called with includes
+            # Verify get was called with includes (ChromaDB requires $eq operator)
             mock_collection.get.assert_called_once_with(
-                where={"document_id": "doc-1"},
+                where={"document_id": {"$eq": "doc-1"}},
                 include=["documents", "metadatas"]
             )
 

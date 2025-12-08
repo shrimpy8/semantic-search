@@ -193,10 +193,14 @@ def render_sidebar_database_management():
     st.sidebar.markdown("### Collection Database")
 
     try:
-        # Show collection document count
-        collection_count = st.session_state.vector_store_manager.get_collection_documents_count()
-        if collection_count > 0:
-            st.sidebar.success(f"**{collection_count}** collection chunks indexed")
+        # Get stats from collection manager (more reliable than vector store metadata)
+        cm = st.session_state.collection_manager
+        collections = cm.list(include_stats=True)
+        total_chunks = sum(c.chunk_count for c in collections)
+        total_docs = sum(c.document_count for c in collections)
+
+        if total_chunks > 0:
+            st.sidebar.success(f"**{total_chunks}** chunks indexed ({total_docs} docs)")
         else:
             st.sidebar.info("No collection documents indexed yet.")
     except Exception as e:
@@ -273,25 +277,25 @@ def render_collection_list():
                 if st.button("Delete", key=f"del_{col.id}", type="secondary"):
                     st.session_state[f"confirm_delete_{col.id}"] = True
 
-                # Confirmation dialog
-                if st.session_state.get(f"confirm_delete_{col.id}"):
-                    st.warning(f"Delete '{col.name}' and all its documents?")
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        if st.button("Yes, delete", key=f"confirm_yes_{col.id}", type="primary"):
-                            try:
-                                cm.delete(col.id, force=True)
-                                st.session_state[f"confirm_delete_{col.id}"] = False
-                                if st.session_state.selected_collection_id == col.id:
-                                    st.session_state.selected_collection_id = None
-                                st.success(f"Deleted '{col.name}'")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                    with col_b:
-                        if st.button("Cancel", key=f"confirm_no_{col.id}"):
+            # Confirmation dialog - outside narrow column for better layout
+            if st.session_state.get(f"confirm_delete_{col.id}"):
+                st.warning(f"Delete '{col.name}' and all its documents?")
+                col_a, col_b, col_c = st.columns([1, 1, 2])
+                with col_a:
+                    if st.button("Yes", key=f"confirm_yes_{col.id}", type="primary", use_container_width=True):
+                        try:
+                            cm.delete(col.id, force=True)
                             st.session_state[f"confirm_delete_{col.id}"] = False
+                            if st.session_state.selected_collection_id == col.id:
+                                st.session_state.selected_collection_id = None
+                            st.success(f"Deleted '{col.name}'")
                             st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                with col_b:
+                    if st.button("Cancel", key=f"confirm_no_{col.id}", use_container_width=True):
+                        st.session_state[f"confirm_delete_{col.id}"] = False
+                        st.rerun()
 
             st.divider()
 

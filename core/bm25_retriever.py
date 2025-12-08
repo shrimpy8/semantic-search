@@ -164,7 +164,12 @@ class BM25Retriever:
             return []
 
         # Get BM25 scores for all documents
-        scores = self.bm25.get_scores(query_tokens)
+        raw_scores = self.bm25.get_scores(query_tokens)
+
+        # Normalize BM25 scores to 0-1 range using min-max scaling
+        # This is critical for combining with semantic scores (already 0-1)
+        # and for meaningful percentage display in the UI
+        scores = self._normalize_scores(raw_scores)
 
         # Create (score, index) pairs and sort by score descending
         scored_indices = [(score, idx) for idx, score in enumerate(scores)]
@@ -176,7 +181,7 @@ class BM25Retriever:
             if score >= score_threshold:
                 results.append(BM25Result(
                     document=self.documents[idx],
-                    score=score,
+                    score=score,  # Now normalized to 0-1
                     rank=rank
                 ))
 
@@ -251,3 +256,53 @@ class BM25Retriever:
         self.tokenized_corpus = []
         self.bm25 = None
         logger.info("BM25 index cleared")
+
+    def _normalize_scores(self, scores) -> List[float]:
+        """
+        Normalize BM25 scores to 0-1 range using min-max scaling.
+
+        BM25 raw scores are unbounded (can be 0 to 20+) which makes them
+        incompatible with semantic scores (0-1 cosine similarity) and
+        unusable as percentages in the UI.
+
+        Min-max normalization: normalized = (score - min) / (max - min)
+
+        Args:
+            scores: Array or list of raw BM25 scores (typically numpy array from BM25Okapi)
+
+        Returns:
+            List of normalized scores in range [0, 1]
+
+        Example:
+            >>> raw = [0.0, 5.0, 10.0, 15.0]
+            >>> normalized = self._normalize_scores(raw)
+            >>> # Returns [0.0, 0.333, 0.666, 1.0]
+        """
+        # Handle empty array - use len() instead of truthiness check
+        # because NumPy arrays raise ValueError on `if not array:`
+        if len(scores) == 0:
+            return []
+
+        # Convert to Python floats for reliable min/max operations
+        # (handles both NumPy arrays and Python lists)
+        scores_list = [float(s) for s in scores]
+
+        min_score = min(scores_list)
+        max_score = max(scores_list)
+
+        # Handle edge case where all scores are the same
+        if max_score == min_score:
+            # If all scores are 0, return all 0s
+            # Otherwise, return all 1s (they're all equally good)
+            return [0.0 if max_score == 0 else 1.0 for _ in scores_list]
+
+        # Apply min-max normalization
+        score_range = max_score - min_score
+        normalized = [(s - min_score) / score_range for s in scores_list]
+
+        logger.debug(
+            f"BM25 score normalization: raw range [{min_score:.3f}, {max_score:.3f}] "
+            f"-> normalized [0.0, 1.0]"
+        )
+
+        return normalized
