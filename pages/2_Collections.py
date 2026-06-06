@@ -180,7 +180,7 @@ def confirm_clear_collection_documents():
                 st.success(f"Cleared {deleted} document chunks from collections")
                 st.rerun()
             except Exception as e:
-                st.error(f"Error clearing database: {str(e)}")
+                st.error("Database clear failed. Please refresh and try again.")
                 logger.error(f"Error clearing collection documents: {e}", exc_info=True)
     with col2:
         if st.button("Cancel", use_container_width=True):
@@ -204,7 +204,7 @@ def render_sidebar_database_management():
         else:
             st.sidebar.info("No collection documents indexed yet.")
     except Exception as e:
-        st.sidebar.warning(f"Could not check database status: {str(e)}")
+        st.sidebar.warning("Could not check database status. Please refresh.")
         logger.error(f"Error checking collection database status: {e}")
 
     if st.sidebar.button("Clear All Collection Documents"):
@@ -580,7 +580,7 @@ def render_upload_document(collection_id: str):
                     error_count += 1
                 except Exception as e:
                     logger.exception(f"Upload error: {e}")
-                    status_text.error(f"❌ '{uploaded_file.name}': {str(e)}")
+                    status_text.error(f"❌ '{uploaded_file.name}': Upload failed. Please try again.")
                     error_count += 1
                     # Mark document as failed if it was created
                     if 'document' in locals() and document:
@@ -757,7 +757,7 @@ def handle_collection_search(query: str, collection_id: str, collection):
             logger.info(f"Search completed in collection {collection_id}: {len(results)} results")
 
         except Exception as e:
-            st.error(f"Error searching: {str(e)}")
+            st.error("Search failed. Please check your query and try again.")
             logger.error(f"Search error in collection {collection_id}: {e}", exc_info=True)
 
 
