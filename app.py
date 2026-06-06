@@ -64,7 +64,6 @@ logging.basicConfig(
     level=getattr(logging, logging_config["level"]),
     format=logging_config["format"],
     handlers=[
-        logging.FileHandler(logging_config["file"]),
         logging.StreamHandler()
     ]
 )
