@@ -59,8 +59,14 @@ class QAChain:
         self.temperature = temperature
         self.retriever = retriever
 
-        # Initialize LLM
-        self.llm_model = ChatOpenAI(model=model_name, temperature=temperature)
+        # Initialize LLM with output token cap and timeout to prevent runaway costs.
+        # TODO: move max_tokens and request_timeout to config.yaml models.chat section.
+        self.llm_model = ChatOpenAI(
+            model=model_name,
+            temperature=temperature,
+            max_tokens=1024,
+            request_timeout=30,
+        )
         logger.info(f"Initialized ChatOpenAI: model={model_name}, temp={temperature}")
 
         # Preserve system_prompt attribute for backward compatibility
