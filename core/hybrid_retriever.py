@@ -245,6 +245,8 @@ class HybridRetriever:
             ...     method=RetrievalMethod.HYBRID
             ... )
         """
+        # Clamp k to a safe server-side range regardless of caller input.
+        k = min(max(1, k), 20)
         fetch_k = fetch_k or k * 3
 
         logger.info(

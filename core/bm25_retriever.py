@@ -160,7 +160,7 @@ class BM25Retriever:
         query_tokens = self._tokenize(query)
 
         if not query_tokens:
-            logger.warning(f"Query tokenization produced no tokens: '{query}'")
+            logger.warning("Query tokenization produced no tokens: '%s'", query[:30])
             return []
 
         # Get BM25 scores for all documents

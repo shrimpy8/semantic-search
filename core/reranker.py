@@ -223,7 +223,6 @@ class JinaReranker(BaseReranker):
             self._model = CrossEncoder(
                 self.model_name,
                 max_length=512,
-                trust_remote_code=True
             )
             self._available = True
             logger.info(f"Jina reranker initialized with model: {self.model_name}")

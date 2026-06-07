@@ -64,7 +64,6 @@ logging.basicConfig(
     level=getattr(logging, logging_config["level"]),
     format=logging_config["format"],
     handlers=[
-        logging.FileHandler(logging_config["file"]),
         logging.StreamHandler()
     ]
 )
@@ -194,7 +193,7 @@ def confirm_clear_documents():
                 logger.info(f"Cleared {deleted} non-collection documents by user")
                 st.rerun()
             except Exception as e:
-                st.error(f"Error clearing database: {str(e)}")
+                st.error("Database clear failed. Please refresh and try again.")
                 logger.error(f"Error clearing vector store: {e}", exc_info=True)
     with col2:
         if st.button("Cancel", use_container_width=True):
@@ -218,7 +217,7 @@ def render_database_management():
         else:
             st.sidebar.info("No documents indexed. Upload a document to begin.")
     except Exception as e:
-        st.sidebar.warning(f"Could not check database status: {str(e)}")
+        st.sidebar.warning("Could not check database status. Please refresh.")
         logger.error(f"Error checking database status: {e}")
 
     if st.sidebar.button("Clear All Documents"):
@@ -490,11 +489,11 @@ def process_uploaded_file(uploaded_file, force_reindex: bool = False):
             logger.info(f"File processing complete: {uploaded_file.name}")
 
         except ValueError as e:
-            st.error(f"Validation error: {str(e)}")
+            st.error("Document processing failed: invalid file or configuration. Please check your document and try again.")
             logger.error(f"Validation error: {e}")
 
         except Exception as e:
-            st.error(f"Error processing file: {str(e)}")
+            st.error("Document processing failed. Please try again.")
             logger.error(f"Error processing file {uploaded_file.name}: {e}", exc_info=True)
 
 
@@ -623,7 +622,7 @@ def handle_question(prompt: str):
             logger.info(f"Answer generated: {len(full_answer)} characters")
 
         except Exception as e:
-            st.error(f"Error generating answer: {str(e)}")
+            st.error("Answer generation failed. Please check your query and try again.")
             logger.error(f"Error generating answer: {e}", exc_info=True)
 
 
